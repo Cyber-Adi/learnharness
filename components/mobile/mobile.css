@@ -1,0 +1,84 @@
+/* Budgets: max two live blurs on screen, no full-screen blurs, animate transform/opacity only. */
+/* Every rule is scoped under [data-lh-mobile] so desktop is never affected. */
+
+[data-lh-mobile] {
+	--lh-m-body: 17px;
+	--lh-m-leading: 1.55;
+	--lh-m-measure: 68ch;
+	--lh-m-h1: 20px;
+	--lh-m-h2: 18px;
+	--lh-m-text-min: 12px;
+	--lh-m-hit: 44px;
+	--lh-m-hit-gap: 8px;
+	--lh-m-gutter: 16px;
+	--lh-m-topbar: 48px;
+	--lh-m-tabbar: 56px;
+	--lh-m-safe-top: env(safe-area-inset-top, 0px);
+	--lh-m-safe-bottom: env(safe-area-inset-bottom, 0px);
+	--lh-m-safe-left: env(safe-area-inset-left, 0px);
+	--lh-m-safe-right: env(safe-area-inset-right, 0px);
+	--lh-m-radius-sheet: 16px;
+	--lh-m-radius-control: 12px;
+	--lh-m-surface: color-mix(in oklab, var(--background) 92%, white);
+	--lh-m-surface-raised: color-mix(in oklab, var(--background) 82%, white);
+	--lh-m-hairline: color-mix(in oklab, var(--foreground) 12%, transparent);
+	--lh-m-scrim: color-mix(in oklab, black 40%, transparent);
+}
+
+.dark [data-lh-mobile] {
+	--lh-m-surface: color-mix(in oklab, var(--background) 92%, white);
+	--lh-m-surface-raised: color-mix(in oklab, var(--background) 86%, white);
+	--lh-m-hairline: color-mix(in oklab, var(--foreground) 14%, transparent);
+	--lh-m-scrim: color-mix(in oklab, black 60%, transparent);
+}
+
+[data-lh-mobile] .lh-m-glass {
+	background: color-mix(in oklab, var(--lh-m-surface) 72%, transparent);
+	-webkit-backdrop-filter: blur(20px);
+	backdrop-filter: blur(20px);
+	border-color: var(--lh-m-hairline);
+}
+
+[data-lh-mobile] .lh-m-scrim {
+	background: var(--lh-m-scrim);
+	transition: opacity 200ms ease-out;
+}
+
+[data-lh-mobile] .lh-m-hit {
+	min-width: var(--lh-m-hit);
+	min-height: var(--lh-m-hit);
+}
+
+[data-lh-mobile] .lh-m-prose {
+	font-size: var(--lh-m-body);
+	line-height: var(--lh-m-leading);
+	max-width: var(--lh-m-measure);
+}
+
+@supports not (backdrop-filter: blur(1px)) {
+	[data-lh-mobile] .lh-m-glass {
+		background: var(--lh-m-surface);
+	}
+}
+
+@media (prefers-contrast: more) {
+	[data-lh-mobile] .lh-m-glass {
+		background: var(--lh-m-surface);
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+	[data-lh-mobile] .lh-m-scrim {
+		background: color-mix(in oklab, black 75%, transparent);
+	}
+}
+
+@media (prefers-reduced-transparency: reduce) {
+	[data-lh-mobile] .lh-m-glass {
+		background: var(--lh-m-surface);
+		-webkit-backdrop-filter: none;
+		backdrop-filter: none;
+	}
+	[data-lh-mobile] .lh-m-scrim {
+		background: color-mix(in oklab, black 75%, transparent);
+	}
+}
