@@ -48,13 +48,19 @@ a Next API.
 | Dev server (browser mode) | `npm run dev` |
 | Desktop dev (Electron) | `npm run desktop:dev` |
 | Build | `npm run build` |
-| Typecheck | `npm run typecheck` |
+| Typecheck | `npm run typecheck` (Playwright files: `npm run typecheck:e2e`) |
 | Lint (upstream import law) | `npm run lint` |
 | All tests (upstream + ours) | `npm test` |
 | Our tests only | `npm run test:mobile` |
 | Coverage gate (80%, our code) | `npm run coverage:mobile` |
 | E2E (390x844, 375x667, 1440x900) | `npm run e2e` (first: `npm run e2e:install`) |
 | Full mobile gate | `npm run check:mobile && npm run e2e` |
+| Regenerate PWA icons | `npm run icons` |
+
+Browser checks against `next dev` use `http://localhost:<port>`, never
+`127.0.0.1` (Next 16 blocks dev resources there, so the page never hydrates).
+Only one `next dev` can run per checkout. `next dev` rewrites `AGENTS.md`:
+revert it before committing.
 
 Baseline: `npm test` has one upstream failure, `tests/render-sidebar.test.tsx:84`,
 which depends on the timezone (it passes under `TZ=UTC`, as in CI). Our scripts pin

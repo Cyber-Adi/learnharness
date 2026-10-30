@@ -184,7 +184,9 @@ The phone is built around one loop: read a short explanation, answer, think alou
 
 Add a Remote Gateway inside the Next server by extending `proxy.ts` (decision 4). The proxy classifies every request as **desktop** (valid `x-learnharness-desktop` capability), **remote** (arrived on an allowlisted tunnel `Host`), or **local browser** (loopback dev mode), and authorizes remote requests only with a valid device credential and a granted scope. Because it lives in the server, the same gateway protects the Electron desktop and a headless host. The per-launch secret never leaves the host.
 
-**Invariant:** the existing "no desktop secret configured means allow" branch of `desktopAPIAuthorized` applies only to loopback requests with a loopback `Host`. A request on a tunnel hostname is never authorized by the absence of configuration.
+**Invariant:** the existing "no desktop secret configured means allow" branch of `desktopAPIAuthorized` applies only to direct loopback requests: a loopback `Host` and no `Forwarded` / `X-Forwarded-*` headers. A request on a tunnel hostname, or any relayed request, is never authorized by the absence of configuration. The pure core is `src/server/remote/classify.ts`; Phase 1 must confirm the Host and forwarding headers `tailscale serve` actually sends before wiring it into `proxy.ts`.
+
+**Form factor before hydration (Phase 1).** Phase 0 decides the shell after hydration, so a phone paints the desktop UI for about 200-270 ms, and crossing 767 px remounts the tree. Phase 1 decides it before hydration (cookie or client hint, sticky per session) so a mounted composer is never swapped out.
 
 **Threat model.** The host holds BYOK provider keys, subscription OAuth credentials, and a learner's full learning history. Anyone who can call `/api/chat` spends the learner's money. The gateway must stop: an unpaired device on the same network or tunnel, a stolen-but-revoked phone, DNS rebinding from a malicious web page, and token replay after logout.
 
