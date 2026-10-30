@@ -19,3 +19,18 @@ xai-credentials.json*
 
 # dev-fresh launcher scratch (fresh-user sim): disposable per launch
 .fresh-data/
+
+# LMobile fork: env, test output, screenshots, agent scratch
+.env
+.env.*
+!.env.example
+coverage/
+test-results/
+playwright-report/
+blob-report/
+screenshots/
+*.screenshot.png
+.phase0/
+.tokensave/
+.claude/settings.local.json
+.claude/scratch/
