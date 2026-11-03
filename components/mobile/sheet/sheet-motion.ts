@@ -4,6 +4,7 @@ import { animate, type AnimationPlaybackControls, type MotionValue, useMotionVal
 import { type RefObject, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react"
 import { type HapticsAdapter, hapticFor } from "../haptics.ts"
 import { SPRING, type SpringKind } from "../motion.ts"
+import { cancelMotion, enterPlan } from "./sheet-lifecycle.ts"
 import { type Detent, LARGE_TOP_INSET, detentTravel, releaseDecision } from "./sheet-physics.ts"
 
 // Far below any viewport, so the first paint of a mounting sheet is off screen.
@@ -57,6 +58,7 @@ export function useSheetMotion(args: SheetMotionArgs): SheetMotion {
 	const controls = useRef<AnimationPlaybackControls | null>(null)
 	const entered = useRef(false)
 	const closeToken = useRef(0)
+	const exitingRef = useRef(false)
 	const exitVelocity = useRef(0)
 	const detentRef = useRef(detent)
 	const heightRef = useRef(0)
@@ -90,27 +92,38 @@ export function useSheetMotion(args: SheetMotionArgs): SheetMotion {
 
 	useLayoutEffect(() => {
 		if (!open || reduced || geo.height === 0) return
-		closeToken.current += 1
-		controls.current?.stop()
-		if (entered.current) {
+		closeToken.current = cancelMotion(controls.current, closeToken.current)
+		const plan = enterPlan({ entered: entered.current, exiting: exitingRef.current, currentY: y.get(), height: geo.height })
+		exitingRef.current = false
+		setExiting(false)
+		if (plan.kind === "snap") {
 			y.set(rest(detentRef.current))
 			return
 		}
 		entered.current = true
-		y.set(geo.height)
+		y.set(plan.from)
 		play(rest(detentRef.current), "sheet")
 	}, [open, reduced, geo.height, rest, y, play])
+
+	useEffect(
+		() => () => {
+			closeToken.current = cancelMotion(controls.current, closeToken.current)
+		},
+		[],
+	)
 
 	useEffect(() => {
 		if (open || reduced || !entered.current) return
 		entered.current = false
 		const token = ++closeToken.current
+		exitingRef.current = true
 		setExiting(true)
 		controls.current?.stop()
 		const run = animate(y, geo.height, { ...SPRING.sheet, velocity: exitVelocity.current })
 		controls.current = run
 		run.then(() => {
 			if (closeToken.current !== token) return
+			exitingRef.current = false
 			setExiting(false)
 			setDetent(initial)
 		})

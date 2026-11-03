@@ -2,6 +2,7 @@
 
 import type { MotionValue } from "motion/react"
 import { type PointerEvent as ReactPointerEvent, type RefObject, useEffect, useMemo, useRef } from "react"
+import { pickTouch, shouldStartPointer } from "./sheet-input.ts"
 import { dragPosition, estimateVelocity, type VelocitySample } from "./sheet-physics.ts"
 
 // Movement before a content touch becomes a sheet drag, so taps and scrolls stay intact.
@@ -22,6 +23,7 @@ export interface GestureOptions {
 }
 
 interface DragState {
+	readonly id: number
 	readonly originClientY: number
 	readonly originY: number
 	readonly samples: readonly VelocitySample[]
@@ -29,9 +31,13 @@ interface DragState {
 
 export interface DragController {
 	readonly active: boolean
-	begin(clientY: number, t: number): void
-	move(clientY: number, t: number): void
-	end(t: number): void
+	begin(clientY: number, t: number, id?: number): void
+	move(clientY: number, t: number, id?: number): void
+	end(t: number, id?: number): void
+	/** Gesture interrupted (capture lost, touchcancel): snap back to the current rest. */
+	cancel(t: number, id?: number): void
+	/** Drop the gesture silently (sheet closed, unmounted, or gesture disabled). */
+	abort(): void
 }
 
 export function createDragController(get: () => GestureOptions): DragController {
@@ -40,20 +46,30 @@ export function createDragController(get: () => GestureOptions): DragController 
 		get active() {
 			return state !== null
 		},
-		begin(clientY, t) {
+		begin(clientY, t, id = 0) {
+			// A second contact never restarts a drag in progress.
+			if (state) return
 			const o = get()
 			o.onGrab()
 			// Start from the live on-screen value so grabbing mid-spring never jumps.
-			state = { originClientY: clientY, originY: o.y.get(), samples: [{ y: clientY, t }] }
+			state = { id, originClientY: clientY, originY: o.y.get(), samples: [{ y: clientY, t }] }
 		},
-		move(clientY, t) {
-			if (!state) return
+		move(clientY, t, id = 0) {
+			if (!state || state.id !== id) return
 			const o = get()
 			state = { ...state, samples: [...state.samples.slice(-(MAX_SAMPLES - 1)), { y: clientY, t }] }
 			o.y.set(dragPosition(state.originY, clientY - state.originClientY, o.topRest, o.dimension))
 		},
-		end(t) {
-			if (!state) return
+		cancel(_t, id = 0) {
+			if (!state || state.id !== id) return
+			state = null
+			get().onRelease({ offsetY: 0, velocityY: 0 })
+		},
+		abort() {
+			state = null
+		},
+		end(t, id = 0) {
+			if (!state || state.id !== id) return
 			const s = state
 			state = null
 			const last = s.samples[s.samples.length - 1]
@@ -71,37 +87,53 @@ export interface HeaderHandlers {
 	readonly onPointerMove: (e: ReactPointerEvent<HTMLElement>) => void
 	readonly onPointerUp: (e: ReactPointerEvent<HTMLElement>) => void
 	readonly onPointerCancel: (e: ReactPointerEvent<HTMLElement>) => void
+	readonly onLostPointerCapture: (e: ReactPointerEvent<HTMLElement>) => void
 }
 
 function bindContent(el: HTMLElement, controller: DragController, get: () => GestureOptions): () => void {
 	let startY = 0
+	let touchId: number | null = null
 	const onStart = (e: TouchEvent) => {
-		startY = e.touches[0]?.clientY ?? 0
+		if (touchId !== null || controller.active) return
+		const t = e.changedTouches[0]
+		if (!t) return
+		touchId = t.identifier
+		startY = t.clientY
 	}
 	const onMove = (e: TouchEvent) => {
-		const touch = e.touches[0]
+		const touch = pickTouch(e.changedTouches, touchId)
 		const o = get()
-		if (!touch || !o.enabled) return
+		if (!touch || touchId === null || !o.enabled) return
 		if (!controller.active) {
 			const dy = touch.clientY - startY
 			const pullDown = dy > HYSTERESIS_PX && el.scrollTop <= 0
 			const pullUp = dy < -HYSTERESIS_PX && o.canExpand
 			if (!pullDown && !pullUp) return
-			controller.begin(touch.clientY, e.timeStamp)
+			controller.begin(touch.clientY, e.timeStamp, touchId)
 		}
 		if (e.cancelable) e.preventDefault()
-		controller.move(touch.clientY, e.timeStamp)
+		controller.move(touch.clientY, e.timeStamp, touchId)
 	}
-	const onEnd = (e: TouchEvent) => controller.end(e.timeStamp)
+	const onEnd = (e: TouchEvent) => {
+		if (!pickTouch(e.changedTouches, touchId)) return
+		controller.end(e.timeStamp, touchId ?? 0)
+		touchId = null
+	}
+	const onCancel = (e: TouchEvent) => {
+		if (!pickTouch(e.changedTouches, touchId)) return
+		controller.cancel(e.timeStamp, touchId ?? 0)
+		touchId = null
+	}
 	el.addEventListener("touchstart", onStart, { passive: true })
 	el.addEventListener("touchmove", onMove, { passive: false })
 	el.addEventListener("touchend", onEnd)
-	el.addEventListener("touchcancel", onEnd)
+	el.addEventListener("touchcancel", onCancel)
 	return () => {
 		el.removeEventListener("touchstart", onStart)
 		el.removeEventListener("touchmove", onMove)
 		el.removeEventListener("touchend", onEnd)
-		el.removeEventListener("touchcancel", onEnd)
+		el.removeEventListener("touchcancel", onCancel)
+		controller.abort()
 	}
 }
 
@@ -124,21 +156,31 @@ export function useSheetGesture(
 		return bindContent(el, controller, () => optsRef.current)
 	}, [mounted, contentRef, controller])
 
+	// Close, disable or unmount drops any in-flight drag so a reopen starts fresh.
+	useEffect(() => {
+		if (!opts.enabled) controller.abort()
+	}, [opts.enabled, controller])
+	useEffect(() => () => controller.abort(), [controller])
+
 	return useMemo<HeaderHandlers>(
 		() => ({
 			onPointerDown(e) {
 				if (!optsRef.current.enabled || (e.target as HTMLElement).closest("button")) return
+				if (!shouldStartPointer(e) || controller.active) return
 				e.currentTarget.setPointerCapture(e.pointerId)
-				controller.begin(e.clientY, e.timeStamp)
+				controller.begin(e.clientY, e.timeStamp, e.pointerId)
 			},
 			onPointerMove(e) {
-				controller.move(e.clientY, e.timeStamp)
+				controller.move(e.clientY, e.timeStamp, e.pointerId)
 			},
 			onPointerUp(e) {
-				controller.end(e.timeStamp)
+				controller.end(e.timeStamp, e.pointerId)
 			},
 			onPointerCancel(e) {
-				controller.end(e.timeStamp)
+				controller.cancel(e.timeStamp, e.pointerId)
+			},
+			onLostPointerCapture(e) {
+				controller.cancel(e.timeStamp, e.pointerId)
 			},
 		}),
 		[controller],
