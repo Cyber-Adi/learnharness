@@ -31,6 +31,7 @@ blob-report/
 screenshots/
 *.screenshot.png
 .phase0/
+.phase1/
 .tokensave/
 .claude/settings.local.json
 .claude/scratch/

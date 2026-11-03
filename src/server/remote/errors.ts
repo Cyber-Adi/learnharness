@@ -9,6 +9,7 @@ export const ERROR_CODES: readonly [
 	"rate_limited",
 	"remote_disabled",
 	"internal",
+	"already_answered",
 ] = Object.freeze([
 	"unauthorized",
 	"forbidden_scope",
@@ -18,6 +19,7 @@ export const ERROR_CODES: readonly [
 	"rate_limited",
 	"remote_disabled",
 	"internal",
+	"already_answered",
 ] as const);
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
@@ -30,6 +32,7 @@ export const ERROR_STATUS: Readonly<Record<ErrorCode, number>> = Object.freeze({
 	rate_limited: 429,
 	remote_disabled: 404,
 	internal: 500,
+	already_answered: 409,
 });
 
 const MESSAGES: Readonly<Record<ErrorCode, string>> = Object.freeze({
@@ -41,6 +44,7 @@ const MESSAGES: Readonly<Record<ErrorCode, string>> = Object.freeze({
 	rate_limited: "Too many requests. Try again later.",
 	remote_disabled: "Not found.",
 	internal: "Something went wrong.",
+	already_answered: "This question was already answered.",
 });
 
 export interface RemoteErrorEnvelope {

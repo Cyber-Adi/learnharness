@@ -81,6 +81,15 @@ async function turnInFlight(model: SessionModel): Promise<boolean | null> {
 	}
 }
 
+/** SYNC-3 (mobile fork): a 409 whose envelope says the question was already answered. */
+async function isAlreadyAnswered(res: Response): Promise<boolean> {
+	try {
+		return ((await res.clone().json()) as { error?: { code?: unknown } }).error?.code === "already_answered";
+	} catch {
+		return false;
+	}
+}
+
 const STREAM_DROPPED = "The connection dropped before the turn completed.";
 
 /** Mark transport failures without confusing JSON/application bugs with drops. */
@@ -234,6 +243,8 @@ export class SessionModel {
 	private onReattachSettled?: () => void;
 	/** The hook's re-render trigger (set by the adapter). */
 	onChange?: () => void;
+	/** SYNC-3 (mobile fork): the answer lost a race to another device. */
+	onAnsweredElsewhere?: () => void;
 
 	// THE STATE: the record (server canon) + the live tail (this client's
 	// optimistic appends and the streaming turn's messages). The tail dies
@@ -349,6 +360,7 @@ export class SessionModel {
 		let response = await this.fetch("/api/chat", init);
 		let waited = 0;
 		while (response.status === 409) {
+			if (await isAlreadyAnswered(response)) return response; // SYNC-3 (mobile fork)
 			await response.body?.cancel().catch(() => {});
 			if (signal?.aborted || waited >= this.waitMaxMs) return response;
 			await delay(this.pollMs, signal);
@@ -727,6 +739,10 @@ export class SessionModel {
 			// STREAM consume stays on the controller — releasing that held
 			// connection is Diet A's whole job.
 			const res = await this.postInputEvent(input);
+			if (res.status === 409 && input.type === "answer" && await isAlreadyAnswered(res)) {
+				// SYNC-3 (mobile fork): another device answered first. Drop ours, adopt canon.
+				return await this.adoptAfterDuplicate(controller, optimistic);
+			}
 			if (res.status === 409) {
 				throw new Error("A turn is already running — try again in a moment.");
 			}
@@ -789,6 +805,33 @@ export class SessionModel {
 			// Opening-message callers restore a draft, never automatically retry.
 			return accepted;
 		}
+	}
+
+	/** SYNC-3 (mobile fork): drop the losing optimistic answer, refetch canon, never error. */
+	private async adoptAfterDuplicate(controller: AbortController, optimistic: readonly LhMessage[]): Promise<false> {
+		const ids = new Set(optimistic.map(m => m.id));
+		this.mutate(() => {
+			this.tail = this.tail.filter(m => !ids.has(m.id));
+			for (const id of ids) this.unconfirmedAnswers.delete(id);
+		});
+		this.onAnsweredElsewhere?.();
+		try {
+			const res = await this.fetch(`/api/chats/${encodeURIComponent(this.chatId)}`, { signal: controller.signal });
+			if (this.consumeAbort !== controller) return false;
+			const record = res.ok ? await res.json() as { messages?: LhMessage[]; turnInFlight?: boolean; turnError?: string } : null;
+			if (this.consumeAbort !== controller) return false;
+			if (record && Array.isArray(record.messages)) {
+				this.setMessages(record.messages, record.turnError);
+				if (record.turnInFlight === true) {
+					await this.resumeStream(false);
+					return false;
+				}
+			}
+		} catch {
+			if (this.consumeAbort !== controller || controller.signal.aborted) return false;
+		}
+		this.setStatus("ready"); // a failed refetch is left to the next sync
+		return false;
 	}
 
 	/**

@@ -53,12 +53,14 @@ test("all methods fail closed for desktop missing/wrong secret; API-only matcher
 	}
 	assert(desktopAPIAuthorized(new Headers({ [HEADER]: secret }), { LH_DESKTOP_SERVER: "1", LH_DESKTOP_API_SECRET: secret }));
 	for (const pathname of ["/api/events", "/api/chat", "/api/settings/models", "/api/chats/scratch/markdown"]) assert(unstable_doesProxyMatch({ config, nextConfig: {}, url: origin + pathname }));
-	assert(!unstable_doesProxyMatch({ config, nextConfig: {}, url: origin + "/chat/new" }));
+	// Mobile fork: pages must pass the gateway (Host check) so remote devices cannot read transcripts.
+	assert(unstable_doesProxyMatch({ config, nextConfig: {}, url: origin + "/chat/new" }));
 	const originalMarker = process.env.LH_DESKTOP_SERVER;
 	const originalSecret = process.env.LH_DESKTOP_API_SECRET;
 	try {
 		process.env.LH_DESKTOP_SERVER = "1";
 		process.env.LH_DESKTOP_API_SECRET = secret;
+		assert.equal(proxy(new NextRequest(origin + "/chat/new", { headers: { host: "127.0.0.1:12345" } })).headers.get("x-middleware-next"), "1");
 		for (const method of ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"]) {
 			assert.equal(proxy(new NextRequest(origin + "/api/settings", { method })).status, 403);
 			assert.equal(proxy(new NextRequest(origin + "/api/settings", { method, headers: { [HEADER]: secret } })).headers.get("x-middleware-next"), "1");

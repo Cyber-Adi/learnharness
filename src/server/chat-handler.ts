@@ -60,6 +60,8 @@ import {
 	type TurnInput,
 } from "../core/input-events.ts";
 import { steerDelivered } from "../core/contracts.ts";
+import { answerOutcome } from "./remote/answers.ts";
+import { remoteError } from "./remote/errors.ts";
 import type {CallUsage} from "../core/contracts.ts";
 
 /**
@@ -80,6 +82,14 @@ import type {CallUsage} from "../core/contracts.ts";
  * wake pipeline's server-side steers (src/server/jobs.ts) — one code path
  * for write-ahead persistence, turn liveness, and the turn services.
  */
+
+/** SYNC-3 (mobile fork): 409 already_answered with the canonical result for a repeat answer, else null. */
+function duplicateAnswerResponse(messages: Parameters<typeof answerOutcome>[0], input: TurnInput): Response | null {
+	if (input.type !== "answer") return null;
+	const outcome = answerOutcome(messages, input.toolCallId);
+	if (outcome.kind !== "duplicate") return null;
+	return Response.json({ ...remoteError("already_answered"), canonical: outcome.result }, { status: 409, headers: { "Cache-Control": "no-store" } });
+}
 
 /** Fresh check only at new background-run admission; never cancel a run
  * already in progress when the opt-in is switched off. */
@@ -194,6 +204,11 @@ export async function handleChatInput(
 		return Response.json({ error: "Unknown chat" }, { status: 404 });
 	}
 
+	// SYNC-3 (mobile fork): a repeat answer gets the canonical record, not the 400 or the turn-running 409.
+	// Before the key gate and compaction: it needs neither and must not trigger either.
+	const early = duplicateAnswerResponse(record.messages, input);
+	if (early) return early;
+
 	// Refuse an ineligible Retry before catalog refresh, compaction, or any
 	// turn/write effects. Revalidate after the awaited gates below too.
 	if (input.type === "retry") {
@@ -300,6 +315,9 @@ export async function handleChatInput(
 	// re-fire of an already-landed one) - with claimSteers gone, this wake
 	// input is the only steer appender; in-run delivery rides pi's own
 	// follow-up queue and never builds an input event at all.
+	// SYNC-3 (mobile fork): re-check on the reloaded record; a racing answer may have landed during the awaits above.
+	const late = duplicateAnswerResponse(record.messages, input);
+	if (late) return late;
 	let appends;
 	try {
 		appends =

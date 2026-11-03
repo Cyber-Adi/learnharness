@@ -142,7 +142,7 @@ describe("failed-response Retry (issue #110)", () => {
 		const before = chatStore.getChat(chat.id)!.messages;
 		assert.deepEqual(roles(chat.id), ["user", "assistant", "toolResult", "assistant"]);
 		assert.ok(endsInFailedTurn(before));
-		assert.equal((await turn(engine, chat.id, { type: "answer", toolCallId: "call-1", answer })).status, 400);
+		assert.equal((await turn(engine, chat.id, { type: "answer", toolCallId: "call-1", answer })).status, 409); // SYNC-3 (mobile fork): a repeat answer is 409 already_answered
 		assert.equal((await turn(engine, chat.id, { type: "retry" })).status, 200);
 
 		const saved = chatStore.getChat(chat.id)!.messages;

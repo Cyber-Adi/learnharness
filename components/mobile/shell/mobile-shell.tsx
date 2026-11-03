@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, useRef, type ReactNode } from "react";
+import { MobileToaster } from "../toast/toaster.tsx";
 import { MobileErrorBoundary } from "./error-boundary.tsx";
 import { MOBILE_TABS, isTabActive, type MobileTab } from "./tabs.ts";
 
@@ -78,6 +79,8 @@ export function MobileShell({ children, pathname, tabs = MOBILE_TABS }: Props) {
 					</Link>
 				))}
 			</nav>
+			{/* Outside main: its paint containment would clip the toasts. */}
+			<MobileToaster />
 		</div>
 	);
 }
