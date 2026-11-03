@@ -2,6 +2,7 @@ import { desktopAPIAuthorized } from "../desktop-access.ts";
 import { classifyRequest, localAuthorizedWithoutSecret } from "./classify.ts";
 import { readDeviceCookie } from "./devices.ts";
 import { ERROR_STATUS, remoteError, type ErrorCode, type RemoteErrorEnvelope } from "./errors.ts";
+import { HOST_ADMIN_HEADER, hostAdminMatches } from "./host-token.ts";
 import { RemoteHosts, type DeviceRecord } from "./schemas.ts";
 import { HOST_ONLY_SCOPES, remoteAllowed, scopeFor } from "./scopes.ts";
 
@@ -11,6 +12,8 @@ export interface GatewayEnv {
 	/** True only when desktop mode is on AND the supplied capability matches. */
 	readonly desktopCapabilityValid: boolean;
 	readonly remoteHosts: readonly string[];
+	/** Local-only host credential (headless host); precomputed so `decide` stays pure. */
+	readonly hostAdminValid?: boolean;
 }
 export interface GatewayInput {
 	readonly method: string;
@@ -97,6 +100,8 @@ export function gatewayEnv(
 		desktopModeConfigured,
 		desktopCapabilityValid: desktopModeConfigured && desktopAPIAuthorized(headers, env),
 		remoteHosts: hosts.success ? hosts.data : [],
+		// Present only when true, so the env shape is unchanged for every other deployment.
+		...(hostAdminMatches(headers.get(HOST_ADMIN_HEADER), env.LH_HOST_ADMIN_TOKEN) ? { hostAdminValid: true } : {}),
 	};
 }
 
@@ -132,7 +137,9 @@ export function decide(input: GatewayInput): GatewayDecision {
 		// Pages are served to loopback browsers and the Electron window without the capability.
 		const authorized = !isApi(input.pathname) || localAuthorizedWithoutSecret(kind, input.env.desktopModeConfigured);
 		if (!authorized) return { kind: "deny", status: 403, body: LOCAL_DENY_BODY };
-		if (input.env.remoteHosts.length > 0 && hostOnlyRoute(input.method, input.pathname)) return deny("forbidden_scope");
+		// The host admin token stands in for the desktop capability on a headless host (local kind only).
+		const hostAdmin = input.env.hostAdminValid === true;
+		if (input.env.remoteHosts.length > 0 && !hostAdmin && hostOnlyRoute(input.method, input.pathname)) return deny("forbidden_scope");
 		return localOriginOk(input.method.toUpperCase(), get) ? { kind: "allow", via: "local" } : deny("bad_origin");
 	}
 	if (kind === "remote") return decideRemote(input, get, (host ?? "").toLowerCase());

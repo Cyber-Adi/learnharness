@@ -52,6 +52,9 @@ import { AppearanceSection, GraphSection } from "./appearance-section.tsx";
 import { KeyboardSection } from "./keyboard-section.tsx";
 import { ChatGPTUIProvider } from "./chatgpt-connection.tsx";
 import { NativeSubscriptionUIProvider } from "./subscription-connections.tsx";
+// Mobile fork: pairing a phone (shown only with NEXT_PUBLIC_LH_MOBILE_SHELL=1).
+import { PairPhoneSection } from "@/components/mobile/pairing/pair-dialog";
+import { visibleSettingsSections } from "@/components/mobile/pairing/settings-entry";
 
 /** Owner (2026-09-20): hints earn their place — mechanics-explaining
  *  prose is out; only the keyboard note stays (storage location is a
@@ -62,8 +65,10 @@ const SECTIONS = [
 	{ id: "appearance", label: "Appearance" },
 	{ id: "graph", label: "Graph" },
 	{ id: "keyboard", label: "Keyboard", hint: "Stored on this device" },
+	{ id: "phone", label: "Phone" },
 	{ id: "general", label: "General" },
 ] as const;
+const NAV_SECTIONS = visibleSettingsSections(SECTIONS, process.env.NEXT_PUBLIC_LH_MOBILE_SHELL === "1");
 type SectionId = (typeof SECTIONS)[number]["id"];
 
 /** `open(section?, row?)` — the optional ROW deep-links into the Keys
@@ -307,7 +312,7 @@ export function SettingsDialogBody({
 					data-testid="settings-nav"
 					className="flex w-44 shrink-0 flex-col gap-1 border-r border-border p-2"
 				>
-					{SECTIONS.map((s) => (
+					{NAV_SECTIONS.map((s) => (
 						<button
 							key={s.id}
 							type="button"
@@ -421,6 +426,7 @@ export function SettingsDialogBody({
 									/>
 								</SettingsSection>
 							)}
+							{active === "phone" && <PairPhoneSection />}
 							{active === "keyboard" && (
 								<SettingsSection
 									title="Keyboard"
