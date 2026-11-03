@@ -1,5 +1,7 @@
 import { notFound } from "next/navigation";
 import { Chat } from "@/components/chat";
+import { MobileSession } from "@/components/mobile/session/mobile-session";
+import { requestFormFactor } from "@/components/mobile/shell/request-form-factor";
 import { slotsConfigured } from "@/src/core";
 import { compactionInFlight, getChat, isTurnRunning, readSettingsRecord, turnFailure } from "@/src/server";
 
@@ -18,6 +20,20 @@ export default async function ChatPage({
 	// The persistent setup CTA's seed (BYOK, owner 2026-09-22): slotsConfigured
 	// over the settings record, server-read — the same gate home/new read. The
 	// server's 503 stays the truth; this only decides whether the pill rides.
+	// Mobile fork: the phone gets the mobile session screen, decided before hydration.
+	if ((await requestFormFactor()) === "mobile") {
+		return (
+			<MobileSession
+				key={chat.id}
+				chatId={chat.id}
+				title={chat.title}
+				kind={chat.kind ?? "teach"}
+				initialMessages={chat.messages}
+				initialError={turnFailure(chat.id)}
+				initiallyInFlight={isTurnRunning(chat.id)}
+			/>
+		);
+	}
 	const record = readSettingsRecord();
 	return (
 		<Chat
