@@ -122,3 +122,20 @@ describe("session-core postInputEvent 409 handling", () => {
 		assert.equal(res.status, 200);
 	});
 });
+
+describe("handleChatRequest duplicate check ordering (SYNC-3)", () => {
+	it("a duplicate answer gets already_answered even when no provider key is configured", async () => {
+		const engine = engineAsking(["c1"]);
+		const chat = await chatAsking(engine, "nokey");
+		assert.equal((await send(engine, chat.id, { type: "answer", toolCallId: "c1", answer: gradedAnswer("c1") })).status, 200);
+		const saved = process.env.OPENROUTER_API_KEY;
+		delete process.env.OPENROUTER_API_KEY;
+		try {
+			const res = await send(engine, chat.id, { type: "answer", toolCallId: "c1", answer: gradedAnswer("c1", ["Venus"]) });
+			assert.equal(res.status, 409);
+			assert.equal(((await res.json()) as { error: { code: string } }).error.code, "already_answered");
+		} finally {
+			process.env.OPENROUTER_API_KEY = saved;
+		}
+	});
+});
