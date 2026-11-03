@@ -6,6 +6,26 @@ const pkg = JSON.parse(readFileSync(new URL("./package.json", import.meta.url), 
 const nextConfig: NextConfig = {
 	// Public build metadata only; no new runtime Electron version API.
 	env: { LH_VERSION: pkg.version, LH_HOMEPAGE: pkg.homepage },
+	// Mobile fork: a stale sw.js must never stick; the client hint and Vary
+	// only matter (and only ship) when the mobile shell is on.
+	async headers() {
+		const sw = {
+			source: "/sw.js",
+			headers: [
+				{ key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+				{ key: "Service-Worker-Allowed", value: "/" },
+			],
+		};
+		if (process.env.NEXT_PUBLIC_LH_MOBILE_SHELL !== "1") return [sw];
+		const hint = {
+			source: "/:path*",
+			headers: [
+				{ key: "Accept-CH", value: "Sec-CH-UA-Mobile" },
+				{ key: "Vary", value: "Sec-CH-UA-Mobile, Cookie" },
+			],
+		};
+		return [sw, hint];
+	},
 	// Desktop target (Electron wrapper, 2026-09-17): standalone output = a
 	// self-contained .next/standalone/server.js the Electron shell spawns
 	// on 127.0.0.1. Harmless for plain web deploys (extra build output).
