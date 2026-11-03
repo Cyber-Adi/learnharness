@@ -24,6 +24,11 @@ for (const c of cases) {
 			expect(widths.scrollWidth).toBeLessThanOrEqual(widths.innerWidth)
 		}
 
+		// With the mobile shell on, a phone's home is the Learn tab, not the desktop composer.
+		if (c.overflow && process.env.LH_E2E_MOBILE === "1") {
+			await expect(page.getByRole("heading", { name: "Learn" })).toBeVisible()
+			return
+		}
 		await expect(page.getByRole("textbox", { name: PLACEHOLDER })).toBeVisible()
 	})
 }
