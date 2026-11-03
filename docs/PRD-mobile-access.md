@@ -162,7 +162,7 @@ The phone is built around one loop: read a short explanation, answer, think alou
 | Hover tooltips, `keyboard-shortcuts.tsx` | Long-press reveals tooltip content; shortcut hints hidden |
 | File-path chips, path input, drop zone | Hidden (paths point at the host's disk); replaced by camera/photo attach where the Strong model accepts images |
 
-**Knowledge graph on a phone.** Default to the chain table's hierarchy, which already exists as data: cluster (birth session) → reasoning chain → proposition statements, with fuzzy search over names, aliases, and statements. Tapping a proposition opens a sheet with its statement, its chains rendered as `A ∧ B ⟹ C`, and links to birth sessions. The canvas Map is read-only: pinch and pan via the existing d3-zoom touch handling, labels shown at closer zoom only, tap a node for the same sheet, no dragging. A "Practice these" action on any cluster or selection starts a practice session.
+**Knowledge graph on a phone.** Default to the chain table's hierarchy, which already exists as data: cluster (birth session) → reasoning chain → proposition statements, with fuzzy search over names, aliases, and statements. Tapping a proposition opens a sheet with its statement, its chains rendered as `A ∧ B ⟹ C`, and links to birth sessions. The canvas Map is read-only: pinch and pan via the existing d3-zoom touch handling, labels shown at closer zoom only, tap a node for the same sheet, no dragging. A "Practice these" action is deferred: mobile only continues existing practice sessions for now (open-question decision, Nov 3, 2026).
 
 **Typography and readability**
 
@@ -298,7 +298,7 @@ Each phase starts only when the previous gate passes; durations are set after Ph
 - [x] Headless host mode: Phase 1 (decision 3).
 - [x] Fork or upstream: upstream-friendly fork (`Cyber-Adi/learnharness`); propose the gateway upstream later.
 - [x] Draft sync cadence: 1 s idle + flush on hide/pagehide/send (decision 1).
-- [ ] Should mobile be allowed to start practice sets from a graph selection in v1, or only continue existing practice sessions? (Out of the v1 loop until decided.)
+- [x] Practice from mobile: continue existing practice sessions only; no starting practice from a graph selection for now (decided Nov 3, 2026).
 - [x] Success metrics: two gates (decision 2).
 
 **Sources**
