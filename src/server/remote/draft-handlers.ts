@@ -1,6 +1,7 @@
 import * as path from "node:path";
 import { z } from "zod";
 import { PATHS } from "../../../config.ts";
+import { readBoundedText } from "./body.ts";
 import { remoteError, ERROR_STATUS, ok, type ErrorCode } from "./errors.ts";
 import { DRAFT_MAX_BYTES, clearDraft, getDraft, isValidChatId, saveDraft } from "./drafts.ts";
 
@@ -32,8 +33,8 @@ export async function handleDraft(req: Request, chatId: string, dir: string = de
 }
 
 async function put(req: Request, chatId: string, dir: string): Promise<Response> {
-	const raw = await req.text();
-	if (raw.length > DRAFT_MAX_BYTES * 2) return fail("invalid_input");
+	const raw = await readBoundedText(req, DRAFT_MAX_BYTES * 2);
+	if (raw === null) return fail("invalid_input");
 	let body: unknown;
 	try {
 		body = JSON.parse(raw);

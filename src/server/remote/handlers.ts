@@ -8,6 +8,7 @@ import {
 	revokeDevice,
 } from "./devices.ts";
 import { ERROR_STATUS, fromZodError, ok, remoteError, type ErrorCode } from "./errors.ts";
+import { readBoundedText } from "./body.ts";
 import { createPairingStore, type PairingStore } from "./pairing.ts";
 import { PairingCode, PairRequest, RemoteHosts } from "./schemas.ts";
 
@@ -19,10 +20,14 @@ const PairBody = z.union([
 	z.strictObject({ shortCode: ShortCode, deviceName: PairRequest.shape.deviceName }),
 ]);
 
-let pairing: PairingStore = createPairingStore();
+// Route bundles may each load this module; one store on globalThis keeps issue and redeem together.
+const STORE_KEY = Symbol.for("lmobile.remote.pairingStore");
+type StoreHolder = { [STORE_KEY]?: PairingStore };
+const holder = globalThis as StoreHolder;
+const pairing = (): PairingStore => (holder[STORE_KEY] ??= createPairingStore());
 /** Test seam: swap the in-memory pairing store. */
 export function setPairingStore(store: PairingStore): void {
-	pairing = store;
+	holder[STORE_KEY] = store;
 }
 
 function failure(code: ErrorCode): Response {
@@ -39,7 +44,7 @@ function remoteHosts(): readonly string[] {
 export async function handlePairingCode(_req: Request): Promise<Response> {
 	const host = remoteHosts()[0];
 	if (!host) return failure("remote_disabled");
-	const issued = pairing.issueCode(Date.now());
+	const issued = pairing().issueCode(Date.now());
 	return success({
 		code: issued.code,
 		shortCode: issued.shortCode,
@@ -50,8 +55,8 @@ export async function handlePairingCode(_req: Request): Promise<Response> {
 
 async function readBody(req: Request): Promise<unknown> {
 	try {
-		const text = await req.text();
-		return text.length > MAX_BODY ? undefined : JSON.parse(text);
+		const text = await readBoundedText(req, MAX_BODY);
+		return text === null ? undefined : JSON.parse(text);
 	} catch {
 		return undefined;
 	}
@@ -61,7 +66,7 @@ export async function handlePair(req: Request): Promise<Response> {
 	const parsed = PairBody.safeParse(await readBody(req));
 	if (!parsed.success) return Response.json(fromZodError(parsed.error), { status: 400, headers: NO_STORE });
 	const secret = "code" in parsed.data ? parsed.data.code : parsed.data.shortCode;
-	const result = pairing.redeem(secret, Date.now());
+	const result = pairing().redeem(secret, Date.now());
 	if (!result.ok) return failure(result.reason === "rate_limited" ? "rate_limited" : "unauthorized");
 	try {
 		const { record, token } = createDevice(

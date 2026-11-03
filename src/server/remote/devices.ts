@@ -112,7 +112,13 @@ function parseCookie(value: string): { id: string; token: string } | null {
 	return { id, token };
 }
 
-export function resolveDevice(file: string, cookieValue: string, now: number): DeviceRecord | null {
+/** `beforeSave` is a test seam that runs between the read and the lastSeen write. */
+export function resolveDevice(
+	file: string,
+	cookieValue: string,
+	now: number,
+	beforeSave?: () => void,
+): DeviceRecord | null {
 	const parsed = parseCookie(cookieValue);
 	if (!parsed) return null;
 	const loaded = load(file);
@@ -125,8 +131,16 @@ export function resolveDevice(file: string, cookieValue: string, now: number): D
 	const lastSeen = found.lastSeenAt === null ? null : Date.parse(found.lastSeenAt);
 	if (lastSeen !== null && now - lastSeen < SEEN_INTERVAL_MS) return toRecord(found);
 	const updated: StoredDevice = { ...found, lastSeenAt: new Date(now).toISOString() };
+	beforeSave?.();
 	try {
-		save(file, loaded.devices.map((d) => (d.id === found.id ? updated : d)));
+		// Re-read: a revoke since our read must not be overwritten by this bookkeeping write.
+		const fresh = load(file);
+		if (fresh.state === "ok") {
+			const current = fresh.devices.find((d) => d.id === found.id);
+			if (current && !current.revokedAt) {
+				save(file, fresh.devices.map((d) => (d.id === found.id ? { ...d, lastSeenAt: updated.lastSeenAt } : d)));
+			} else if (current) return null;
+		}
 	} catch {
 		console.error("could not record device activity");
 	}

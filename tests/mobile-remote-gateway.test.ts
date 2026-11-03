@@ -57,7 +57,8 @@ test("desktop capability allows any route", () => {
 });
 
 test("local loopback without desktop mode is allowed (browser mode)", () => {
-	const d = decide(input({ headers: { host: "localhost:3000" }, pathname: "/api/keys" }));
+	// Remote off: upstream's browser mode keeps admin routes on loopback.
+	const d = decide(input({ headers: { host: "localhost:3000" }, pathname: "/api/keys", env: env({ remoteHosts: [] }) }));
 	assert.deepEqual(d, { kind: "allow", via: "local" });
 });
 

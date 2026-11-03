@@ -23,4 +23,7 @@ export function proxy(request: NextRequest) {
 	return NextResponse.next();
 }
 
-export const config = { matcher: "/api/:path*" };
+// Pages pass the gateway too (Host check, device gate); static assets must not match.
+export const config = {
+	matcher: "/((?!_next/static|_next/image|icons/|sw\\.js$|manifest\\.webmanifest$|favicon\\.ico$).*)",
+};

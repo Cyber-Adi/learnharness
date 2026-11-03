@@ -3,7 +3,7 @@ import * as path from "node:path";
 import { z } from "zod";
 
 /** Same rule as upstream's chat-store id check (src/store/chats.ts). */
-const CHAT_ID = /^[A-Za-z0-9_-]+$/;
+const CHAT_ID = /^[A-Za-z0-9_-]{1,128}$/;
 export const DRAFT_MAX_BYTES = 32 * 1024;
 const SELECTION_MAX_BYTES = 8 * 1024;
 const sizeOf = (v: unknown): number => Buffer.byteLength(JSON.stringify(v) ?? "");
@@ -38,10 +38,15 @@ function readStored(dir: string, chatId: string): Draft | null {
 }
 
 function writeAtomic(dir: string, chatId: string, draft: Draft): void {
-	fs.mkdirSync(dir, { recursive: true });
+	fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 	const tmp = path.join(dir, `.${chatId}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`);
-	fs.writeFileSync(tmp, JSON.stringify(draft));
-	fs.renameSync(tmp, fileOf(dir, chatId));
+	try {
+		fs.writeFileSync(tmp, JSON.stringify(draft), { mode: 0o600 });
+		fs.renameSync(tmp, fileOf(dir, chatId));
+	} catch (err: unknown) {
+		fs.rmSync(tmp, { force: true });
+		throw err;
+	}
 }
 
 /** Last writer wins by clientUpdatedAt within one question; a new question replaces the old draft. */
