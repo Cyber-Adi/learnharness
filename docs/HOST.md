@@ -16,6 +16,10 @@ Run LMobile on an always-on Mac or VPS with no Electron. The phone reaches it ov
    The pairing UI lands in Wave C; until then pairing is not available from the browser.
 5. Revoke a device: remove it from the paired devices list (Wave C UI), which invalidates its credential at once.
 
+Process notes
+- `LH_DATA_DIR`, when set, is passed to the server explicitly.
+- If the server dies from a signal the host exits non-zero (128 plus the signal number), so a supervisor restarts it.
+
 Security notes
 - The server binds 127.0.0.1 always; only the tunnel can reach it.
 - A phone never gets the `admin` or `graph:write` scopes.

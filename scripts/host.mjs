@@ -6,7 +6,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { hostConfig } from "./host-config.mjs";
+import { childEnv, exitCodeFor, hostConfig } from "./host-config.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const STANDALONE = path.join(ROOT, ".next", "standalone");
@@ -22,15 +22,13 @@ if (!fs.existsSync(SERVER)) {
 	process.exit(1);
 }
 const { config } = result;
-const env = {
-	...process.env,
-	NODE_ENV: "production",
-	HOSTNAME: config.hostname,
-	PORT: String(config.port),
-	LH_REMOTE_HOSTS: config.remoteHosts.join(","),
-};
+const env = childEnv(config, process.env);
 console.log(`[host] listening on http://${config.hostname}:${config.port}`);
 console.log(`[host] next: tailscale serve --bg https / http://127.0.0.1:${config.port}`);
 const child = spawn(process.execPath, [SERVER], { cwd: STANDALONE, env, stdio: "inherit" });
 for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => child.kill(sig));
-child.on("exit", (code) => process.exit(code ?? 0));
+child.on("error", (err) => {
+	console.error(`[host] could not start the server: ${err.code ?? "unknown error"}`);
+	process.exit(1);
+});
+child.on("exit", (code, signal) => process.exit(exitCodeFor(code, signal)));

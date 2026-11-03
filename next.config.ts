@@ -18,7 +18,8 @@ const nextConfig: NextConfig = {
 		};
 		if (process.env.NEXT_PUBLIC_LH_MOBILE_SHELL !== "1") return [sw];
 		const hint = {
-			source: "/:path*",
+			// Not on assets the browser caches by URL: Vary: Cookie would fragment them.
+			source: "/:path((?!_next/static|_next/image|icons/|sw\\.js|manifest\\.webmanifest).*)",
 			headers: [
 				{ key: "Accept-CH", value: "Sec-CH-UA-Mobile" },
 				{ key: "Vary", value: "Sec-CH-UA-Mobile, Cookie" },

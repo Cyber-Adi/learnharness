@@ -1,6 +1,7 @@
-// App shell worker. Mirrors components/mobile/pwa/sw-policy.ts; a test checks the rules match.
+// App shell worker. Mirrors components/mobile/pwa/sw-policy.ts; tests/mobile-sw-vm.test.ts runs this file against it.
 const CACHE = "lh-shell-v1";
-const STATIC_PREFIXES = ["/_next/static/", "/icons/"];
+const CACHE_FIRST = ["/_next/static/"];
+const REVALIDATE = ["/icons/"];
 const SHELL = "/";
 
 self.addEventListener("install", (event) => {
@@ -24,11 +25,27 @@ self.addEventListener("activate", (event) => {
 
 function strategy(req) {
 	if (req.method !== "GET") return "network-only";
-	const path = new URL(req.url).pathname;
+	let path;
+	try {
+		path = new URL(req.url).pathname;
+	} catch {
+		return "network-only";
+	}
 	if (path === "/api" || path.startsWith("/api/")) return "network-only";
-	if (STATIC_PREFIXES.some((p) => path.startsWith(p))) return "cache-first";
+	if (CACHE_FIRST.some((p) => path.startsWith(p))) return "cache-first";
+	if (REVALIDATE.some((p) => path.startsWith(p))) return "stale-while-revalidate";
 	if (req.mode === "navigate") return "network-first-shell";
 	return "network-only";
+}
+
+// Only complete, readable responses: a 206 or an opaque body must never be replayed as a full one.
+function cacheable(res) {
+	return res.status === 200 && (res.type === "basic" || res.type === "cors");
+}
+
+function store(cache, req, res) {
+	if (!cacheable(res)) return Promise.resolve();
+	return Promise.resolve(cache.put(req, res.clone())).catch(() => {});
 }
 
 self.addEventListener("fetch", (event) => {
@@ -45,13 +62,26 @@ self.addEventListener("fetch", (event) => {
 				const hit = await c.match(req);
 				if (hit) return hit;
 				const res = await fetch(req);
-				if (res.ok) c.put(req, res.clone());
+				store(c, req, res);
 				return res;
 			}),
 		);
 		return;
 	}
-	event.respondWith(
-		fetch(req).catch(async () => (await caches.match(SHELL)) || Response.error()),
-	);
+	if (s === "stale-while-revalidate") {
+		event.respondWith(
+			caches.open(CACHE).then(async (c) => {
+				const hit = await c.match(req);
+				const refresh = fetch(req).then(async (res) => {
+					await store(c, req, res);
+					return res;
+				});
+				if (!hit) return refresh;
+				refresh.catch(() => {});
+				return hit;
+			}),
+		);
+		return;
+	}
+	event.respondWith(fetch(req).catch(async () => (await caches.match(SHELL)) || Response.error()));
 });

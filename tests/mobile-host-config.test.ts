@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { hostConfig } from "../scripts/host-config.mjs";
+import { childEnv, exitCodeFor, hostConfig } from "../scripts/host-config.mjs";
 
 const good = { LH_REMOTE_HOSTS: "my-mac.tailnet-1234.ts.net" };
 
@@ -45,5 +45,46 @@ describe("hostConfig", () => {
 			assert.ok(!JSON.stringify(r.errors).includes(secret));
 			assert.ok(!JSON.stringify(r.errors).includes("10.0.0.1"));
 		}
+	});
+});
+
+describe("exitCodeFor", () => {
+	it("a child killed by a signal exits non-zero", () => {
+		assert.equal(exitCodeFor(null, "SIGKILL"), 137);
+		assert.equal(exitCodeFor(null, "SIGTERM"), 143);
+		assert.equal(exitCodeFor(null, "SIGINT"), 130);
+		assert.equal(exitCodeFor(null, "SIGUSR1") !== 0, true);
+	});
+	it("a normal exit keeps its code", () => {
+		assert.equal(exitCodeFor(0, null), 0);
+		assert.equal(exitCodeFor(3, null), 3);
+	});
+	it("a child with neither code nor signal is a failure", () => {
+		assert.notEqual(exitCodeFor(null, null), 0);
+	});
+});
+
+describe("childEnv", () => {
+	it("passes the configured data dir as LH_DATA_DIR", () => {
+		const r = hostConfig({ ...good, LH_DATA_DIR: "/tmp/lh-data" });
+		assert.ok(r.ok);
+		if (r.ok) assert.equal(childEnv(r.config, {}).LH_DATA_DIR, "/tmp/lh-data");
+	});
+	it("leaves LH_DATA_DIR out when no data dir is configured", () => {
+		const r = hostConfig(good);
+		assert.ok(r.ok);
+		if (r.ok) assert.equal("LH_DATA_DIR" in childEnv(r.config, {}), false);
+	});
+	it("binds loopback, sets the port and the remote hosts, and does not mutate its input", () => {
+		const r = hostConfig({ ...good, PORT: "4001" });
+		assert.ok(r.ok);
+		if (!r.ok) return;
+		const base = Object.freeze({ HOSTNAME: "0.0.0.0", KEEP: "1" });
+		const env = childEnv(r.config, base);
+		assert.equal(env.HOSTNAME, "127.0.0.1");
+		assert.equal(env.PORT, "4001");
+		assert.equal(env.NODE_ENV, "production");
+		assert.equal(env.LH_REMOTE_HOSTS, "my-mac.tailnet-1234.ts.net");
+		assert.equal(env.KEEP, "1");
 	});
 });

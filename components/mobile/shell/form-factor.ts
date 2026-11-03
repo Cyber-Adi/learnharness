@@ -39,7 +39,10 @@ export function nextFactor(mounted: boolean, initial: FormFactor, resolved: Form
 	return mounted ? initial : resolved;
 }
 
-/** The cookie to write when the client disagrees with the server's guess. */
-export function cookieCorrection(initial: FormFactor, resolved: FormFactor): FormFactor | null {
-	return initial === resolved ? null : resolved;
+/** The cookie to write when the client disagrees with the server's guess. A
+ * narrow desktop window must never persist "mobile": only a touch device may. */
+export function cookieCorrection(initial: FormFactor, resolved: FormFactor, coarsePointer: boolean): FormFactor | null {
+	if (initial === resolved) return null;
+	if (resolved === "mobile" && !coarsePointer) return null;
+	return resolved;
 }

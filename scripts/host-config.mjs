@@ -52,3 +52,35 @@ export function hostConfig(env) {
 		}),
 	};
 }
+
+const SIGNAL_NUMBERS = Object.freeze({ SIGHUP: 1, SIGINT: 2, SIGQUIT: 3, SIGABRT: 6, SIGKILL: 9, SIGUSR1: 10, SIGSEGV: 11, SIGUSR2: 12, SIGPIPE: 13, SIGALRM: 14, SIGTERM: 15 });
+
+/**
+ * Shell convention: a signal death is 128 + signal number, so a supervisor sees a failure.
+ * @param {number | null} code
+ * @param {string | null} signal
+ */
+export function exitCodeFor(code, signal) {
+	if (typeof code === "number") return code;
+	if (signal) return 128 + (SIGNAL_NUMBERS[signal] ?? 1);
+	return 1;
+}
+
+/**
+ * Environment for the server child. An explicit LH_DATA_DIR wins over whatever was inherited.
+ * @param {HostConfig} config
+ * @param {Record<string, string | undefined>} base
+ * @returns {Record<string, string | undefined>}
+ */
+export function childEnv(config, base) {
+	/** @type {Record<string, string | undefined>} */
+	const env = {
+		...base,
+		NODE_ENV: "production",
+		HOSTNAME: config.hostname,
+		PORT: String(config.port),
+		LH_REMOTE_HOSTS: config.remoteHosts.join(","),
+	};
+	if (config.dataDir !== undefined) env.LH_DATA_DIR = config.dataDir;
+	return env;
+}

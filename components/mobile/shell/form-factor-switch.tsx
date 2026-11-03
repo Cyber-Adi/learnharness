@@ -12,17 +12,18 @@ import {
 	type FormFactor,
 } from "./form-factor.ts";
 
-function resolveFromMedia(): FormFactor {
+function resolveFromMedia(): { readonly factor: FormFactor; readonly coarse: boolean } {
 	const [narrow, coarse, standalone] = [NARROW_QUERY, COARSE_QUERY, STANDALONE_QUERY].map(
 		(q) => window.matchMedia(q).matches,
 	);
-	return resolveFormFactor({
+	const factor = resolveFormFactor({
 		enabled: true,
 		width: narrow ? 0 : Number.POSITIVE_INFINITY,
 		coarsePointer: Boolean(coarse),
 		standalone: Boolean(standalone),
 		electron: detectElectron(navigator.userAgent),
 	});
+	return { factor, coarse: Boolean(coarse) };
 }
 
 interface Props {
@@ -38,7 +39,8 @@ export function FormFactorSwitch({ enabled, initial = "desktop", desktop, mobile
 	const factor: FormFactor = enabled ? initial : "desktop";
 	useEffect(() => {
 		if (!enabled) return;
-		const fix = cookieCorrection(initial, resolveFromMedia());
+		const { factor: resolved, coarse } = resolveFromMedia();
+		const fix = cookieCorrection(initial, resolved, coarse);
 		if (fix) document.cookie = formFactorCookie(fix);
 	}, [enabled, initial]);
 	return factor === "mobile" ? mobile : desktop;
