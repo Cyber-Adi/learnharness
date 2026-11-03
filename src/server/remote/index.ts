@@ -4,3 +4,6 @@ export * from "./schemas.ts";
 export * from "./scopes.ts";
 export * from "./answers.ts";
 export * from "./drafts.ts";
+export * from "./devices.ts";
+export * from "./gateway.ts";
+export * from "./pairing.ts";

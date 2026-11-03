@@ -37,6 +37,11 @@ const entry = (scope: Scope, methods: readonly Method[] | "*", pattern: string):
 
 /** First match wins; order is most specific first. Unlisted means denied. */
 export const ROUTE_SCOPES: readonly RouteScope[] = Object.freeze([
+	// pair is public on remote hosts via the gateway's single exception; as a scope it stays admin.
+	entry("admin", ["POST"], "/api/remote/pair"),
+	entry("admin", ["POST"], "/api/remote/pairing-code"),
+	entry("admin", ["GET"], "/api/remote/devices"),
+	entry("admin", ["DELETE"], "/api/remote/devices/[id]"),
 	entry("models:read", ["GET"], "/api/settings"),
 	entry("admin", NON_GET, "/api/settings"),
 	entry("admin", "*", "/api/settings/**"),

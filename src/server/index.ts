@@ -51,4 +51,5 @@ export { claudeCodeInstallationResponse } from "./claude-code.ts";
 export * from "./custom-provider.ts";
 export { customProviderGet, customProviderMutation } from "./custom-provider-http.ts";
 // Mobile fork: remote pairing/devices and the SYNC-4 draft route handlers.
+export { handleListDevices, handlePair, handlePairingCode, handleRevokeDevice } from "./remote/handlers.ts";
 export { handleDraft } from "./remote/draft-handlers.ts";

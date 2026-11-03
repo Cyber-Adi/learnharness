@@ -1,0 +1,12 @@
+{
+	"verified": false,
+	"note": "ASSUMED, not captured from a real `tailscale serve`. Verify on a live tailnet before trusting. Host is preserved as <machine>.<tailnet>.ts.net; the gateway authorizes only by device cookie and never trusts Tailscale-User-* identity headers.",
+	"host": "my-mac.tailnet-1234.ts.net",
+	"headers": {
+		"host": "my-mac.tailnet-1234.ts.net",
+		"x-forwarded-for": "100.101.102.103",
+		"x-forwarded-proto": "https",
+		"tailscale-user-login": "someone@example.com",
+		"tailscale-user-name": "Some One"
+	}
+}
