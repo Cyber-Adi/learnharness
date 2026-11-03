@@ -1,31 +1,21 @@
 "use client";
 
-import { useSyncExternalStore, type ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
 	COARSE_QUERY,
 	NARROW_QUERY,
 	STANDALONE_QUERY,
+	cookieCorrection,
 	detectElectron,
+	formFactorCookie,
 	resolveFormFactor,
 	type FormFactor,
 } from "./form-factor.ts";
 
-const QUERIES = [NARROW_QUERY, COARSE_QUERY, STANDALONE_QUERY] as const;
-
-const subscribeNone = () => () => {};
-const desktopSnapshot = (): FormFactor => "desktop";
-const serverSnapshot = (): FormFactor => "desktop";
-
-function subscribeMedia(onChange: () => void): () => void {
-	const lists = QUERIES.map((q) => window.matchMedia(q));
-	for (const l of lists) l.addEventListener("change", onChange);
-	return () => {
-		for (const l of lists) l.removeEventListener("change", onChange);
-	};
-}
-
-function mediaSnapshot(): FormFactor {
-	const [narrow, coarse, standalone] = QUERIES.map((q) => window.matchMedia(q).matches);
+function resolveFromMedia(): FormFactor {
+	const [narrow, coarse, standalone] = [NARROW_QUERY, COARSE_QUERY, STANDALONE_QUERY].map(
+		(q) => window.matchMedia(q).matches,
+	);
 	return resolveFormFactor({
 		enabled: true,
 		width: narrow ? 0 : Number.POSITIVE_INFINITY,
@@ -37,16 +27,19 @@ function mediaSnapshot(): FormFactor {
 
 interface Props {
 	readonly enabled: boolean;
+	readonly initial?: FormFactor;
 	readonly desktop: ReactNode;
 	readonly mobile: ReactNode;
 }
 
-/** Desktop on the server and first client render; media queries decide after. */
-export function FormFactorSwitch({ enabled, desktop, mobile }: Props) {
-	const factor = useSyncExternalStore(
-		enabled ? subscribeMedia : subscribeNone,
-		enabled ? mediaSnapshot : desktopSnapshot,
-		serverSnapshot,
-	);
+/** The server decides; the tree is sticky for the life of the page. A client
+ * that disagrees only corrects the cookie so the next load is right. */
+export function FormFactorSwitch({ enabled, initial = "desktop", desktop, mobile }: Props) {
+	const factor: FormFactor = enabled ? initial : "desktop";
+	useEffect(() => {
+		if (!enabled) return;
+		const fix = cookieCorrection(initial, resolveFromMedia());
+		if (fix) document.cookie = formFactorCookie(fix);
+	}, [enabled, initial]);
 	return factor === "mobile" ? mobile : desktop;
 }

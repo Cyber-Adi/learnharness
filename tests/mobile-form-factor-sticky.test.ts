@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import { describe, it } from "node:test";
+import { cookieCorrection, nextFactor } from "../components/mobile/shell/form-factor.ts";
+
+describe("sticky form factor", () => {
+	it("does not swap trees after mount when media queries change", () => {
+		assert.equal(nextFactor(true, "mobile", "desktop"), "mobile");
+		assert.equal(nextFactor(true, "desktop", "mobile"), "desktop");
+	});
+	it("uses the resolved value only before mount", () => {
+		assert.equal(nextFactor(false, "desktop", "mobile"), "mobile");
+	});
+	it("a disagreeing client resolution produces a cookie correction, not a swap", () => {
+		assert.equal(cookieCorrection("mobile", "desktop"), "desktop");
+		assert.equal(cookieCorrection("desktop", "desktop"), null);
+	});
+});

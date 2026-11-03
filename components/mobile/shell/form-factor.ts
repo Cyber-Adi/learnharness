@@ -25,3 +25,21 @@ export function resolveFormFactor(input: FormFactorInput): FormFactor {
 export function detectElectron(userAgent: string): boolean {
 	return userAgent.includes("Electron");
 }
+
+export const FORM_FACTOR_COOKIE = "lh_ff";
+const COOKIE_MAX_AGE = 400 * 24 * 60 * 60;
+
+/** Readable by the client (no HttpOnly) so a wrong guess can be corrected. */
+export function formFactorCookie(value: FormFactor): string {
+	return `${FORM_FACTOR_COOKIE}=${value}; Path=/; SameSite=Lax; Max-Age=${COOKIE_MAX_AGE}`;
+}
+
+/** Once mounted the tree never swaps; before mount the resolved value may apply. */
+export function nextFactor(mounted: boolean, initial: FormFactor, resolved: FormFactor): FormFactor {
+	return mounted ? initial : resolved;
+}
+
+/** The cookie to write when the client disagrees with the server's guess. */
+export function cookieCorrection(initial: FormFactor, resolved: FormFactor): FormFactor | null {
+	return initial === resolved ? null : resolved;
+}
