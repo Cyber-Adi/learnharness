@@ -17,6 +17,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef } from "react";
 import type { ChatInput, LhMessage, QuestionAnswerData } from "@/src/core";
 import { SessionModel, type SessionState } from "@/components/session-core";
+import { useDesktopDraftBridge } from "@/components/mobile/drafts/use-desktop-bridge"; // SYNC-4 (mobile fork)
 
 export interface UseChatSessionOptions {
 	chatId: string;
@@ -26,9 +27,13 @@ export interface UseChatSessionOptions {
 	initialError?: string;
 	/** Reattach on mount: a turn is running server-side with no live view. */
 	initiallyInFlight?: boolean;
+	/** SYNC-4 (mobile fork): sync question drafts with the server as this device. */
+	syncDraftsAs?: "desktop";
+	/** SYNC-3 (mobile fork): a duplicate answer was refused because another device answered first. */
+	onAnsweredElsewhere?: () => void;
 }
 
-export function useChatSession({ chatId, initialMessages, initialError, initiallyInFlight }: UseChatSessionOptions) {
+export function useChatSession({ chatId, initialMessages, initialError, initiallyInFlight, syncDraftsAs, onAnsweredElsewhere }: UseChatSessionOptions) {
 	// The model is per-mount (chatId-keyed component); onChange forces the
 	// re-render. The ref pattern keeps it stable across renders.
 	const modelRef = useRef<SessionModel | null>(null);
@@ -75,6 +80,22 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 
 	// The view + state, derived per model change from the model.
 	const state = useMemo<SessionState>(() => model.getState(), [model, version] as const);
+
+	// SYNC-3 (mobile fork): a ref keeps the latest callback without re-subscribing.
+	const answeredElsewhereRef = useRef(onAnsweredElsewhere);
+	answeredElsewhereRef.current = onAnsweredElsewhere;
+	useEffect(() => {
+		model.onAnsweredElsewhere = () => answeredElsewhereRef.current?.();
+		return () => {
+			model.onAnsweredElsewhere = undefined;
+		};
+	}, [model]);
+
+	// SYNC-4 (mobile fork): desktop draft bridge. The dock reads its draft only at mount, so a
+	// seed bumps draftSeedVersion, which the dock is keyed on.
+	const [draftSeedVersion, seedBump] = useReducer((n: number) => n + 1, 0);
+	const onDraftSeeded = useCallback(() => { seedBump(); bump(); }, [bump]);
+	useDesktopDraftBridge(model, chatId, state.nativeMessages, syncDraftsAs === "desktop", onDraftSeeded);
 
 	// THE TURN-STATE BROADCAST (owner, sidebar round 2026-10-02): the same
 	// optimistic machine, propagated — the instant a turn starts locally
@@ -148,5 +169,6 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 		clearError,
 		resumeStream,
 		setReattachSettled,
+		draftSeedVersion,
 	};
 }
