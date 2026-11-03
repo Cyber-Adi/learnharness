@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import { cookies, headers } from "next/headers";
 import { JetBrains_Mono, Source_Sans_3 } from "next/font/google";
 import "katex/dist/katex.min.css";
 import "./globals.css";
@@ -9,15 +8,14 @@ import { ServerEventsProvider } from "@/components/server-events";
 import { AppearanceProvider } from "@/components/settings/appearance";
 import UpdateBanner from "@/components/update-banner";
 import { FormFactorSwitch } from "@/components/mobile/shell/form-factor-switch";
-import { FORM_FACTOR_COOKIE, formFactorFromRequest } from "@/components/mobile/shell/form-factor-server";
-import type { FormFactor } from "@/components/mobile/shell/form-factor";
+import { MOBILE_SHELL_ENABLED, requestFormFactor } from "@/components/mobile/shell/request-form-factor";
 import { MobileShell } from "@/components/mobile/shell/mobile-shell";
 import { SwRegister } from "@/components/mobile/pwa/sw-register";
 import { ReducedMotionRoot } from "@/components/mobile/reduced-motion";
 import "@/components/mobile/mobile.css";
 
 // LMobile: the phone shell stays dark until Phase 1 fills it (docs/PRD-mobile-access.md).
-const MOBILE_SHELL = process.env.NEXT_PUBLIC_LH_MOBILE_SHELL === "1";
+const MOBILE_SHELL = MOBILE_SHELL_ENABLED;
 
 // Chrome = JetBrains Mono, teaching prose = Source Sans 3, titles = CMU
 // Serif (the bundled lh-cmu @font-face in globals.css — no CDN).
@@ -37,22 +35,8 @@ export const viewport: Viewport = {
 	themeColor: "#141414",
 };
 
-// Decided before hydration so a phone never mounts the desktop tree first
-// (docs/LESSONS.md). Only read when the shell is on: reading request data
-// makes the layout dynamic, and the desktop build must not change.
-async function initialFormFactor(): Promise<FormFactor> {
-	if (!MOBILE_SHELL) return "desktop";
-	const [jar, h] = await Promise.all([cookies(), headers()]);
-	return formFactorFromRequest({
-		enabled: MOBILE_SHELL,
-		cookie: jar.get(FORM_FACTOR_COOKIE)?.value,
-		userAgent: h.get("user-agent") ?? "",
-		chMobile: h.get("sec-ch-ua-mobile"),
-	});
-}
-
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-	const initial = await initialFormFactor();
+	const initial = await requestFormFactor();
 	return (
 		<html lang="en" className={`dark ${ui.variable} ${prose.variable}`}>
 			<body className="min-h-dvh antialiased">
