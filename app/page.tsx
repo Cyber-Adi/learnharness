@@ -1,5 +1,7 @@
 import { Home } from "@/components/home";
-import { readSettingsRecord } from "@/src/server";
+import { LearnScreen } from "@/components/mobile/learn/learn-screen";
+import { requestFormFactor } from "@/components/mobile/shell/request-form-factor";
+import { compactionInFlight, isTurnRunning, listChats, readSettingsRecord } from "@/src/server";
 import { resolveSettings, slotsConfigured } from "@/src/core";
 
 // Dynamic: the configured state is server-rendered into the page (the
@@ -7,7 +9,12 @@ import { resolveSettings, slotsConfigured } from "@/src/core";
 // the record (dynamic routes aren't cached client-side).
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+export default async function HomePage() {
+	// Mobile fork: the phone's home is the Learn tab (continue existing sessions only).
+	if ((await requestFormFactor()) === "mobile") {
+		const initialChats = listChats().map((c) => ({ ...c, busy: isTurnRunning(c.id), compacting: compactionInFlight(c.id) }));
+		return <LearnScreen initialChats={initialChats} now={Date.now()} />;
+	}
 	// First-run gate (model-slots wave): chats cannot start until the user
 	// has picked all three slots — the dock shows the CTA while the raw
 	// record's models section lacks any slot pin.
