@@ -60,6 +60,8 @@ import {
 	type TurnInput,
 } from "../core/input-events.ts";
 import { steerDelivered } from "../core/contracts.ts";
+import { answerOutcome } from "./remote/answers.ts";
+import { remoteError } from "./remote/errors.ts";
 import type {CallUsage} from "../core/contracts.ts";
 
 /**
@@ -300,6 +302,13 @@ export async function handleChatInput(
 	// re-fire of an already-landed one) - with claimSteers gone, this wake
 	// input is the only steer appender; in-run delivery rides pi's own
 	// follow-up queue and never builds an input event at all.
+	// SYNC-3 (mobile fork): a repeat answer gets the canonical record, not the 400 or the turn-running 409.
+	if (input.type === "answer") {
+		const outcome = answerOutcome(record.messages, input.toolCallId);
+		if (outcome.kind === "duplicate") {
+			return Response.json({ ...remoteError("already_answered"), canonical: outcome.result }, { status: 409, headers: { "Cache-Control": "no-store" } });
+		}
+	}
 	let appends;
 	try {
 		appends =

@@ -36,6 +36,7 @@ test("every error code has a status and a generic message", () => {
 			rate_limited: 429,
 			remote_disabled: 404,
 			internal: 500,
+			already_answered: 409,
 		},
 	);
 	const messages = new Set<string>();

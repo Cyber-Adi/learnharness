@@ -81,6 +81,15 @@ async function turnInFlight(model: SessionModel): Promise<boolean | null> {
 	}
 }
 
+/** SYNC-3 (mobile fork): a 409 whose envelope says the question was already answered. */
+async function isAlreadyAnswered(res: Response): Promise<boolean> {
+	try {
+		return ((await res.clone().json()) as { error?: { code?: unknown } }).error?.code === "already_answered";
+	} catch {
+		return false;
+	}
+}
+
 const STREAM_DROPPED = "The connection dropped before the turn completed.";
 
 /** Mark transport failures without confusing JSON/application bugs with drops. */
@@ -349,6 +358,7 @@ export class SessionModel {
 		let response = await this.fetch("/api/chat", init);
 		let waited = 0;
 		while (response.status === 409) {
+			if (await isAlreadyAnswered(response)) return response; // SYNC-3 (mobile fork)
 			await response.body?.cancel().catch(() => {});
 			if (signal?.aborted || waited >= this.waitMaxMs) return response;
 			await delay(this.pollMs, signal);
