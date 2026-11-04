@@ -4,15 +4,15 @@ import Link from "next/link";
 import { useEffect, useReducer, useRef, useState } from "react";
 import {
 	INITIAL_PAIR_STATE,
+	chooseSecret,
+	codeAfterAttempt,
 	INSTALL_STEPS,
 	PAIR_COPY,
 	normalizeDeviceName,
-	normalizeShortCode,
 	pairState,
 	readAndClearHash,
 	sanitizeShortCodeInput,
 	submitPair,
-	type PairSecret,
 	type PairState,
 } from "./pair-model.ts";
 
@@ -109,8 +109,9 @@ export function PairPage() {
 
 	const submit = async () => {
 		const name = normalizeDeviceName(deviceName);
-		const short = normalizeShortCode(shortCode);
-		const secret: PairSecret | null = short ? { kind: "short", value: short } : code ? { kind: "code", value: code } : null;
+		const secret = chooseSecret(shortCode, code);
+		// Single use: drop the long code now so a failed try is never resent.
+		setCode(codeAfterAttempt(code, secret));
 		dispatch({ type: "submit" });
 		const ok = name !== null && secret !== null && (await submitPair(fetch, secret, name));
 		dispatch({ type: ok ? "succeeded" : "failed" });

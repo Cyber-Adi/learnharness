@@ -4,14 +4,18 @@
 import assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { insideTmp } from "./seed-guard.ts"
 import { createFauxCore, fauxAssistantMessage, fauxText, fauxToolCall } from "@earendil-works/pi-ai";
 
 assert.equal(process.env.NODE_ENV, "test", "seed runs with NODE_ENV=test (faux engine only)");
 const dataDir = process.env.LH_DATA_DIR;
 const seedFile = process.env.LH_E2E_SEED_FILE;
 assert.ok(dataDir && seedFile, "LH_DATA_DIR and LH_E2E_SEED_FILE are required");
+// Seeding writes real records: refuse anything that is not scratch space.
+assert.ok(insideTmp(dataDir), "LH_DATA_DIR must be inside the OS temp dir");
 // Never the developer's real key store: the faux engine needs only a key's presence.
 assert.ok(process.env.LH_AUTH_FILE, "LH_AUTH_FILE must point at a scratch file");
+assert.ok(insideTmp(process.env.LH_AUTH_FILE), "LH_AUTH_FILE must be inside the OS temp dir");
 if (!fs.existsSync(process.env.LH_AUTH_FILE)) fs.writeFileSync(process.env.LH_AUTH_FILE, "{}");
 process.env.OPENROUTER_API_KEY ??= "seed-key-presence-gate";
 

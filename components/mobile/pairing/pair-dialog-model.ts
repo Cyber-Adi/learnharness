@@ -80,3 +80,5 @@ export function parseCodeResponse(json: unknown): CodeResult {
 	const bad = ErrorResponse.safeParse(json);
 	return bad.success && bad.data.error.code === "remote_disabled" ? { kind: "remote_disabled" } : { kind: "error" };
 }
+/** How often the paired-device list refreshes while the pairing dialog is open. */
+export const DEVICE_REFRESH_MS = 5000;

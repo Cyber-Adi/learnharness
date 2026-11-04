@@ -7,7 +7,7 @@ import * as path from "node:path";
 import { pathToFileURL } from "node:url";
 import { renderUnicodeCompact } from "uqr";
 import { z } from "zod";
-import { adminTokenFile, hostConfig, resolveDataDir } from "./host-config.mjs";
+import { adminTokenFile, hostConfig, resolveDataDir, tokenFileProblem } from "./host-config.mjs";
 
 const Response_ = z.object({
 	ok: z.literal(true),
@@ -42,8 +42,12 @@ async function main() {
 	const standalone = path.join(path.resolve(import.meta.dirname, ".."), ".next", "standalone");
 	let token;
 	try {
-		token = fs.readFileSync(adminTokenFile(resolveDataDir(result.config, standalone)), "utf8").trim();
-	} catch {
+		const file = adminTokenFile(resolveDataDir(result.config, standalone));
+		const problem = tokenFileProblem(fs.lstatSync(file), process.getuid?.() ?? -1);
+		if (problem) throw new Error(problem);
+		token = fs.readFileSync(file, "utf8").trim();
+	} catch (err) {
+		if (err instanceof Error && err.message.startsWith("the host admin token")) throw err;
 		throw new Error("no host admin token found; start the host first");
 	}
 	const { url, init } = pairRequest(result.config, token);

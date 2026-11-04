@@ -22,12 +22,12 @@ Run LMobile on an always-on Mac or VPS with no Electron. The phone reaches it ov
 
 Process notes
 - `LH_DATA_DIR`, when set, is passed to the server explicitly.
-- Each start writes a fresh 256-bit host admin token to `<data dir>/host-admin.token` (mode 0600; data dir is `LH_DATA_DIR`, else `.next/standalone/data`) and gives it to the server only as `LH_HOST_ADMIN_TOKEN`. `npm run host:pair` reads the file. Restarting invalidates the old token.
+- Each start writes a fresh 256-bit host admin token to `<data dir>/host-admin.token` (mode 0600; data dir is `LH_DATA_DIR`, else `.next/standalone/data`) and gives it to the server only as `LH_HOST_ADMIN_TOKEN`. `npm run host:pair` reads the file (it refuses one not owned by you or readable by others). Restarting invalidates the old token. The data dir is created 0700 and refused if group or others can write it; the token file is removed when the host exits.
 - If the server dies from a signal the host exits non-zero (128 plus the signal number), so a supervisor restarts it.
 
 Security notes
 - The server binds 127.0.0.1 always; only the tunnel can reach it.
-- The host admin token only works on loopback requests with no proxy headers; it never authorizes a tunneled request. Do not copy it off the host.
+- The host admin token only works on loopback requests with no proxy headers; it never authorizes a tunneled request. It unlocks only pairing-code, device list and device revoke; settings, keys and the rest stay behind the desktop capability. The server removes it from its own environment after startup so agent subprocesses never inherit it. Do not copy it off the host.
 - A phone never gets the `admin` or `graph:write` scopes.
 - Secrets come from the environment only. Config errors name the variable, never the value.
 - Build with `NEXT_PUBLIC_LH_MOBILE_SHELL=1` to serve the phone shell.

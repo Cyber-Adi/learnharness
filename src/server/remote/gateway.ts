@@ -2,7 +2,7 @@ import { desktopAPIAuthorized } from "../desktop-access.ts";
 import { classifyRequest, localAuthorizedWithoutSecret } from "./classify.ts";
 import { readDeviceCookie } from "./devices.ts";
 import { ERROR_STATUS, remoteError, type ErrorCode, type RemoteErrorEnvelope } from "./errors.ts";
-import { HOST_ADMIN_HEADER, hostAdminMatches } from "./host-token.ts";
+import { HOST_ADMIN_HEADER, expectedHostToken, hostAdminMatches, hostTokenRoute } from "./host-token.ts";
 import { RemoteHosts, type DeviceRecord } from "./schemas.ts";
 import { HOST_ONLY_SCOPES, remoteAllowed, scopeFor } from "./scopes.ts";
 
@@ -101,7 +101,7 @@ export function gatewayEnv(
 		desktopCapabilityValid: desktopModeConfigured && desktopAPIAuthorized(headers, env),
 		remoteHosts: hosts.success ? hosts.data : [],
 		// Present only when true, so the env shape is unchanged for every other deployment.
-		...(hostAdminMatches(headers.get(HOST_ADMIN_HEADER), env.LH_HOST_ADMIN_TOKEN) ? { hostAdminValid: true } : {}),
+		...(hostAdminMatches(headers.get(HOST_ADMIN_HEADER), expectedHostToken(env)) ? { hostAdminValid: true } : {}),
 	};
 }
 
@@ -138,7 +138,7 @@ export function decide(input: GatewayInput): GatewayDecision {
 		const authorized = !isApi(input.pathname) || localAuthorizedWithoutSecret(kind, input.env.desktopModeConfigured);
 		if (!authorized) return { kind: "deny", status: 403, body: LOCAL_DENY_BODY };
 		// The host admin token stands in for the desktop capability on a headless host (local kind only).
-		const hostAdmin = input.env.hostAdminValid === true;
+		const hostAdmin = input.env.hostAdminValid === true && hostTokenRoute(input.method, input.pathname);
 		if (input.env.remoteHosts.length > 0 && !hostAdmin && hostOnlyRoute(input.method, input.pathname)) return deny("forbidden_scope");
 		return localOriginOk(input.method.toUpperCase(), get) ? { kind: "allow", via: "local" } : deny("bad_origin");
 	}

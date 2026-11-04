@@ -1,4 +1,5 @@
 import * as fs from "node:fs";
+import { randomBytes as nodeRandomBytes } from "node:crypto";
 import * as path from "node:path";
 import { z } from "zod";
 
@@ -107,16 +108,38 @@ export function makeAdminToken(randomBytes) {
 	return randomBytes(32).toString("base64url");
 }
 
-/** Atomic rewrite, owner-only. Nothing else is written beside it. */
+/** Creates the data dir 0700 if missing; refuses one that group or others can write. */
+export function ensureDataDir(dir) {
+	fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+	if ((fs.statSync(dir).mode & 0o022) !== 0) throw new Error("data dir is group or world writable");
+}
+
+/** Atomic rewrite, owner-only, via an unpredictable tmp name opened exclusively (no planted-link reuse). */
 export function writeAdminToken(file, token) {
-	fs.mkdirSync(path.dirname(file), { recursive: true });
-	const tmp = `${file}.${process.pid}.tmp`;
+	ensureDataDir(path.dirname(file));
+	const tmp = `${file}.${nodeRandomBytes(8).toString("hex")}.tmp`;
 	try {
-		fs.writeFileSync(tmp, token, { mode: 0o600 });
-		fs.chmodSync(tmp, 0o600);
+		fs.writeFileSync(tmp, token, { mode: 0o600, flag: "wx" });
 		fs.renameSync(tmp, file);
 	} catch (err) {
 		fs.rmSync(tmp, { force: true });
 		throw err;
 	}
+}
+
+/** Best effort and idempotent; called on SIGINT, SIGTERM and exit. */
+export function removeAdminToken(file) {
+	fs.rmSync(file, { force: true });
+}
+
+/**
+ * Why a token file must not be trusted, or null. Pass an lstat result.
+ * @param {{ uid: number, mode: number, isFile(): boolean }} st
+ * @param {number} uid the current user
+ */
+export function tokenFileProblem(st, uid) {
+	if (!st.isFile()) return "the host admin token is not a regular file";
+	if (st.uid !== uid) return "the host admin token is not owned by you";
+	if ((st.mode & 0o077) !== 0) return "the host admin token is readable by others";
+	return null;
 }

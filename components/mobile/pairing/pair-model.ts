@@ -107,3 +107,14 @@ export function pairState(state: PairState, action: PairAction): PairState {
 			return state.phase === "failed" ? { phase: "form" } : state;
 	}
 }
+/** The short code wins; the long code is used only while it is still unspent. */
+export function chooseSecret(shortCode: string, code: string | null): PairSecret | null {
+	const short = normalizeShortCode(shortCode);
+	if (short) return { kind: "short", value: short };
+	return code ? { kind: "code", value: code } : null;
+}
+
+/** A long code is single use: once tried (pass or fail) it is dropped, so a retry needs the short code. */
+export function codeAfterAttempt(code: string | null, used: PairSecret | null): string | null {
+	return used?.kind === "code" ? null : code;
+}

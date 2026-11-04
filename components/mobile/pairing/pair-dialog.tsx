@@ -7,6 +7,7 @@ import { SettingsSection } from "@/components/settings/controls";
 import { DeviceList } from "./pair-devices.tsx";
 import {
 	DEVICES_PATH,
+	DEVICE_REFRESH_MS,
 	PAIRING_CODE_PATH,
 	formatCountdown,
 	groupShortCode,
@@ -21,13 +22,13 @@ import { PairQr } from "./pair-qr.tsx";
 export const REMOTE_OFF_COPY = "Remote access is off. Set LH_REMOTE_HOSTS on the host to pair a phone.";
 
 /** QR, grouped short code and a live countdown; an expired code offers a new one instead. */
-export function PairCodePanel({ code, now, onNewCode }: { code: PairCode; now: number; onNewCode: () => void }) {
+export function PairCodePanel({ code, now, busy = false, onNewCode }: { code: PairCode; now: number; busy?: boolean; onNewCode: () => void }) {
 	const left = remainingMs(code.expiresAt, now);
 	if (left === 0) {
 		return (
 			<div className="flex flex-col items-center gap-3 py-4" data-testid="pair-expired">
 				<p className="text-sm text-muted-foreground">This code has expired.</p>
-				<Button type="button" onClick={onNewCode}>New code</Button>
+				<Button type="button" disabled={busy} onClick={onNewCode}>New code</Button>
 			</div>
 		);
 	}
@@ -37,6 +38,24 @@ export function PairCodePanel({ code, now, onNewCode }: { code: PairCode; now: n
 			<p className="font-mono text-3xl tracking-widest" aria-label="Short code">{groupShortCode(code.shortCode)}</p>
 			<p className="text-xs text-muted-foreground">Expires in {formatCountdown(left)}</p>
 		</div>
+	);
+}
+
+interface BodyProps {
+	readonly code: PairCode;
+	readonly now: number;
+	readonly busy: boolean;
+	readonly error: boolean;
+	readonly onNewCode: () => void;
+}
+
+/** Dialog content: the code panel plus its error, so a failed new code is visible where the user is looking. */
+export function PairDialogBody({ code, now, busy, error, onNewCode }: BodyProps) {
+	return (
+		<>
+			<PairCodePanel code={code} now={now} busy={busy} onNewCode={onNewCode} />
+			{error && <p className="mt-2 text-xs text-destructive" role="alert">Could not get a pairing code. Try again.</p>}
+		</>
 	);
 }
 
@@ -104,8 +123,13 @@ export function PairPhoneSection() {
 	useEffect(() => {
 		if (!open) return;
 		const timer = setInterval(() => setNow(Date.now()), 1000);
-		return () => clearInterval(timer);
-	}, [open]);
+		// A phone that pairs while the dialog is open should appear without closing it.
+		const poll = setInterval(() => void refresh(), DEVICE_REFRESH_MS);
+		return () => {
+			clearInterval(timer);
+			clearInterval(poll);
+		};
+	}, [open, refresh]);
 
 	const pair = useCallback(async () => {
 		setBusy(true);
@@ -149,7 +173,7 @@ export function PairPhoneSection() {
 				onConfirmRevoke={(id) => void revoke(id)}
 				onCancelRevoke={() => setConfirmingId(null)}
 			/>
-			{error && <p className="px-6 text-xs text-destructive" role="alert">Could not get a pairing code. Try again.</p>}
+			{error && !open && <p className="px-6 text-xs text-destructive" role="alert">Could not get a pairing code. Try again.</p>}
 			<Dialog.Root open={open} onOpenChange={onOpenChange}>
 				<Dialog.Portal>
 					<Dialog.Overlay className="fixed inset-0 z-[60] bg-black/50" />
@@ -158,7 +182,7 @@ export function PairPhoneSection() {
 						<Dialog.Description className="mb-4 mt-1 text-xs text-muted-foreground">
 							Scan with the iPhone camera, or open LearnHarness on the phone and enter the code.
 						</Dialog.Description>
-						{code && <PairCodePanel code={code} now={now} onNewCode={() => void pair()} />}
+						{code && <PairDialogBody code={code} now={now} busy={busy} error={error} onNewCode={() => void pair()} />}
 						<div className="mt-4 flex justify-end">
 							<Dialog.Close asChild>
 								<Button type="button" variant="ghost" size="sm">Close</Button>

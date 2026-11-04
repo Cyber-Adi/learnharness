@@ -30,7 +30,8 @@ export default defineConfig({
 	webServer: {
 		command: `${MOBILE ? seedCommand : ""}npx next dev -p ${PORT}`,
 		url: `http://localhost:${PORT}`,
-		reuseExistingServer: !process.env.CI,
+		// A reused dev server would run against someone else's data dir, not the seeded scratch one.
+		reuseExistingServer: !process.env.CI && !MOBILE,
 		timeout: 120_000,
 		env: {
 			LH_DATA_DIR: dataDir,

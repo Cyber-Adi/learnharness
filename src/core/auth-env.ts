@@ -20,5 +20,6 @@ export function externalCliEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.Pro
 	for (const name of fillGap) {
 		if (!realEnv.has(name)) delete result[name];
 	}
+	delete result.LH_HOST_ADMIN_TOKEN; // mobile fork: the host token never reaches agent subprocesses
 	return result;
 }
