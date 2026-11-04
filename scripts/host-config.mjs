@@ -1,3 +1,6 @@
+import * as fs from "node:fs";
+import { randomBytes as nodeRandomBytes } from "node:crypto";
+import * as path from "node:path";
 import { z } from "zod";
 
 // Same rules as RemoteHosts in src/server/remote/schemas.ts (tests share the cases).
@@ -70,9 +73,10 @@ export function exitCodeFor(code, signal) {
  * Environment for the server child. An explicit LH_DATA_DIR wins over whatever was inherited.
  * @param {HostConfig} config
  * @param {Record<string, string | undefined>} base
+ * @param {string} [adminToken] per-start host admin token; reaches the child only through this env var
  * @returns {Record<string, string | undefined>}
  */
-export function childEnv(config, base) {
+export function childEnv(config, base, adminToken) {
 	/** @type {Record<string, string | undefined>} */
 	const env = {
 		...base,
@@ -80,7 +84,62 @@ export function childEnv(config, base) {
 		HOSTNAME: config.hostname,
 		PORT: String(config.port),
 		LH_REMOTE_HOSTS: config.remoteHosts.join(","),
+		LH_HOST_ADMIN_TOKEN: adminToken,
 	};
+	// Never inherit a stale token from the parent environment.
+	if (adminToken === undefined) delete env.LH_HOST_ADMIN_TOKEN;
 	if (config.dataDir !== undefined) env.LH_DATA_DIR = config.dataDir;
 	return env;
+}
+
+/** Same default the server uses: config.ts resolves data/ beside itself, i.e. inside the standalone dir. */
+export function resolveDataDir(config, standaloneRoot) {
+	return config.dataDir !== undefined ? path.resolve(config.dataDir) : path.join(standaloneRoot, "data");
+}
+
+/** @param {string} dataDir */
+export function adminTokenFile(dataDir) {
+	return path.join(dataDir, "host-admin.token");
+}
+
+/** 256 bits, unpadded base64url (43 chars).
+ * @param {(n: number) => Buffer} randomBytes */
+export function makeAdminToken(randomBytes) {
+	return randomBytes(32).toString("base64url");
+}
+
+/** Creates the data dir 0700 if missing; refuses one that group or others can write. */
+export function ensureDataDir(dir) {
+	fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+	if ((fs.statSync(dir).mode & 0o022) !== 0) throw new Error("data dir is group or world writable");
+}
+
+/** Atomic rewrite, owner-only, via an unpredictable tmp name opened exclusively (no planted-link reuse). */
+export function writeAdminToken(file, token) {
+	ensureDataDir(path.dirname(file));
+	const tmp = `${file}.${nodeRandomBytes(8).toString("hex")}.tmp`;
+	try {
+		fs.writeFileSync(tmp, token, { mode: 0o600, flag: "wx" });
+		fs.renameSync(tmp, file);
+	} catch (err) {
+		fs.rmSync(tmp, { force: true });
+		throw err;
+	}
+}
+
+/** Best effort and idempotent; called on SIGINT, SIGTERM and exit. */
+export function removeAdminToken(file) {
+	fs.rmSync(file, { force: true });
+}
+
+/**
+ * Why a token file must not be trusted, or null. Pass an lstat result.
+ * @param {{ uid: number, mode: number, isFile(): boolean }} st
+ * @param {number} uid the current user
+ */
+export function tokenFileProblem(st, uid) {
+	if (!st.isFile()) return "the host admin token is not a regular file";
+	if (st.uid !== uid) return "the host admin token is not owned by you";
+	if ((st.mode & 0o077) !== 0) return "the host admin token is readable by others";
+	return null;
 }

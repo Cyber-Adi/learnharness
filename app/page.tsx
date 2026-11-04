@@ -1,5 +1,9 @@
+import { cookies } from "next/headers";
 import { Home } from "@/components/home";
-import { readSettingsRecord } from "@/src/server";
+import { LearnScreen } from "@/components/mobile/learn/learn-screen";
+import { TZ_COOKIE, resolveTimeZone } from "@/components/mobile/learn/time-zone";
+import { requestFormFactor } from "@/components/mobile/shell/request-form-factor";
+import { compactionInFlight, isTurnRunning, listChats, readSettingsRecord } from "@/src/server";
 import { resolveSettings, slotsConfigured } from "@/src/core";
 
 // Dynamic: the configured state is server-rendered into the page (the
@@ -7,7 +11,14 @@ import { resolveSettings, slotsConfigured } from "@/src/core";
 // the record (dynamic routes aren't cached client-side).
 export const dynamic = "force-dynamic";
 
-export default function HomePage() {
+export default async function HomePage() {
+	// Mobile fork: the phone's home is the Learn tab (continue existing sessions only).
+	if ((await requestFormFactor()) === "mobile") {
+		const initialChats = listChats().map((c) => ({ ...c, busy: isTurnRunning(c.id), compacting: compactionInFlight(c.id) }));
+		// The phone's zone rides in a cookie so server and first client render agree (UTC until it is set).
+		const timeZone = resolveTimeZone((await cookies()).get(TZ_COOKIE)?.value);
+		return <LearnScreen initialChats={initialChats} now={Date.now()} timeZone={timeZone} />;
+	}
 	// First-run gate (model-slots wave): chats cannot start until the user
 	// has picked all three slots — the dock shows the CTA while the raw
 	// record's models section lacks any slot pin.

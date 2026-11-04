@@ -85,9 +85,29 @@ export function useSheetMotion(args: SheetMotionArgs): SheetMotion {
 			const next = measure(panelRef.current)
 			if (next) setGeo((prev) => (prev.height === next.height && prev.travel === next.travel ? prev : next))
 		}
-		update()
+		// Radix mounts the portal content a commit later, so the panel may not exist yet:
+		// wait for it, then re-measure whenever its size changes (content, keyboard, rotation).
+		let frame = 0
+		let observer: ResizeObserver | null = null
+		const attach = () => {
+			const el = panelRef.current
+			if (!el) {
+				frame = requestAnimationFrame(attach)
+				return
+			}
+			update()
+			if (typeof ResizeObserver !== "undefined") {
+				observer = new ResizeObserver(update)
+				observer.observe(el)
+			}
+		}
+		attach()
 		window.addEventListener("resize", update)
-		return () => window.removeEventListener("resize", update)
+		return () => {
+			cancelAnimationFrame(frame)
+			observer?.disconnect()
+			window.removeEventListener("resize", update)
+		}
 	}, [visible, reduced, panelRef])
 
 	useLayoutEffect(() => {

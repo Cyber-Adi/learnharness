@@ -6,7 +6,8 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
-import { childEnv, exitCodeFor, hostConfig } from "./host-config.mjs";
+import { randomBytes } from "node:crypto";
+import { adminTokenFile, childEnv, exitCodeFor, hostConfig, makeAdminToken, removeAdminToken, resolveDataDir, writeAdminToken } from "./host-config.mjs";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const STANDALONE = path.join(ROOT, ".next", "standalone");
@@ -22,11 +23,27 @@ if (!fs.existsSync(SERVER)) {
 	process.exit(1);
 }
 const { config } = result;
-const env = childEnv(config, process.env);
+// Fresh per start; the file lets `npm run host:pair` act as the host. Never logged.
+const adminToken = makeAdminToken(randomBytes);
+const tokenFile = adminTokenFile(resolveDataDir(config, STANDALONE));
+try {
+	writeAdminToken(tokenFile, adminToken);
+} catch {
+	console.error("[host] could not write the host admin token file");
+	process.exit(1);
+}
+const env = childEnv(config, process.env, adminToken);
 console.log(`[host] listening on http://${config.hostname}:${config.port}`);
 console.log(`[host] next: tailscale serve --bg https / http://127.0.0.1:${config.port}`);
 const child = spawn(process.execPath, [SERVER], { cwd: STANDALONE, env, stdio: "inherit" });
-for (const sig of ["SIGINT", "SIGTERM"]) process.on(sig, () => child.kill(sig));
+// The token file must not outlive the host.
+process.on("exit", () => removeAdminToken(tokenFile));
+for (const sig of ["SIGINT", "SIGTERM"]) {
+	process.on(sig, () => {
+		removeAdminToken(tokenFile);
+		child.kill(sig);
+	});
+}
 child.on("error", (err) => {
 	console.error(`[host] could not start the server: ${err.code ?? "unknown error"}`);
 	process.exit(1);

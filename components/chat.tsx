@@ -82,6 +82,7 @@ import {
 	toolQuestionKind,
 	questionNeedsReveal,
 } from "@/src/core";
+import { desktopDraftSyncMode } from "@/components/mobile/drafts/desktop-bridge"; // SYNC-4 (mobile fork)
 import { ReadingThinkingField } from "@/components/reading-thinking";
 import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/thinking-block";
 
@@ -255,8 +256,8 @@ export function Chat({
 	// (core/view.ts projectView); sends are ONE explicit input event each
 	// ({chatId, input} — the stash indirection died with the SDK), and the
 	// turn stream is the VERBATIM AgentEvent passthrough the server emits.
-	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, resumeStream, setReattachSettled } =
-		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight });
+	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, resumeStream, setReattachSettled, draftSeedVersion } =
+		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight, syncDraftsAs: desktopDraftSyncMode(process.env.NEXT_PUBLIC_LH_MOBILE_SHELL) }); // SYNC-4 (mobile fork)
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);
@@ -1680,6 +1681,7 @@ export function Chat({
 				<DockOverlay
 					pending={pending}
 					initialQuestionDraft={pending ? questionDraft(pending.key)?.form : undefined}
+					draftSeedVersion={draftSeedVersion}
 					onSaveQuestionDraft={(form) => { if (pending) saveQuestionDraft(pending.key, { form }); }}
 					practice={activeProblem}
 					compactionRunning={compacting}
@@ -1911,6 +1913,7 @@ export function shouldStampGeometryMute(nextH: number, prevH: number, pending: b
 function DockOverlay({
 	pending,
 	initialQuestionDraft,
+	draftSeedVersion,
 	onSaveQuestionDraft,
 	practice,
 	compactionRunning,
@@ -1937,6 +1940,8 @@ function DockOverlay({
 }: {
 	pending: ReturnType<typeof pendingQuestionOf>;
 	initialQuestionDraft?: QuestionFormDraft;
+	/** SYNC-4 (mobile fork): bumps when a phone draft seeds the dock, remounting it to read the draft. */
+	draftSeedVersion?: number;
 	onSaveQuestionDraft: (draft: QuestionFormDraft) => void;
 	/** Compaction running for this chat (round 14) — the docks' submit
 	 *  affordance gate (the server's registry is the real one). */
@@ -2374,6 +2379,7 @@ function DockOverlay({
 						>
 							{pending ? (
 								<QuestionDock
+									key={`draft-seed-${draftSeedVersion ?? 0}`}
 									toolName={pending.tool as "quiz" | "probe" | "ask_user_question" | "explain" | "recall"}
 									toolCallId={pending.toolCallId}
 									input={pending.input as never}

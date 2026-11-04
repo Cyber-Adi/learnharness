@@ -245,6 +245,8 @@ export class SessionModel {
 	onChange?: () => void;
 	/** SYNC-3 (mobile fork): the answer lost a race to another device. */
 	onAnsweredElsewhere?: () => void;
+	/** SYNC-4 (mobile fork): desktop draft bridge; fired for the pending question's draft. */
+	onQuestionDraft?: (questionKey: string, toolCallId: string, draft: QuestionDraft) => void;
 
 	// THE STATE: the record (server canon) + the live tail (this client's
 	// optimistic appends and the streaming turn's messages). The tail dies
@@ -878,9 +880,9 @@ export class SessionModel {
 
 	/** The answer path (the dock): the answer IS the question call's tool
 	 *  result (fork 1), riding as its input event. */
-	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string): Promise<void> {
+	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string): Promise<boolean> {
 		void tool;
-		return this.send({ type: "answer", toolCallId, answer: output }, undefined, questionKey).then(() => undefined);
+		return this.send({ type: "answer", toolCallId, answer: output }, undefined, questionKey); // SYNC-4 (mobile fork): resolves accepted
 	}
 
 	/** The dismissal path (owner design 2026-10-03, "A2"): the skipped
@@ -948,6 +950,10 @@ export class SessionModel {
 
 	saveQuestionDraft(questionKey: string, draft: Partial<QuestionDraft>): void {
 		this.questionDrafts.set(questionKey, { ...this.questionDrafts.get(questionKey), ...draft });
+		// SYNC-4 (mobile fork)
+		const merged = this.questionDrafts.get(questionKey);
+		const pending = this.onQuestionDraft && merged ? pendingQuestionOf([...this.base, ...this.tail]) : null;
+		if (pending && merged && pending.key === questionKey) this.onQuestionDraft?.(questionKey, pending.toolCallId, merged);
 	}
 
 	private forgetResolvedDrafts(record: readonly LhMessage[]): void {

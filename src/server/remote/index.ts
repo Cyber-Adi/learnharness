@@ -7,3 +7,4 @@ export * from "./drafts.ts";
 export * from "./devices.ts";
 export * from "./gateway.ts";
 export * from "./pairing.ts";
+export * from "./host-token.ts";
