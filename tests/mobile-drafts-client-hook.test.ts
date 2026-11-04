@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { deleteDraft, loadDraft, putDraft, type FetchLike } from "../components/mobile/drafts/draft-client.ts";
+import { deleteDraft, loadDraft, putDraft, putDraftDetailed, type FetchLike } from "../components/mobile/drafts/draft-client.ts";
 import type { WireDraft } from "../components/mobile/drafts/draft-wire.ts";
 
 const AT = "2026-03-01T12:00:00.000Z";
@@ -55,5 +55,25 @@ describe("draft client (useDraftSync transport)", () => {
 		assert.deepEqual(JSON.parse(String(captured?.body)), body);
 		assert.equal(await putDraft(async () => new Response("{}", { status: 400 }), "c", body, false), false);
 		assert.equal(await putDraft(async () => { throw new Error("x"); }, "c", body, false), false);
+	});
+});
+
+describe("putDraftDetailed (G2)", () => {
+	const body: WireDraft = { toolCallId: "call-1", text: "x", confidence: null, selection: null, clientUpdatedAt: AT, deviceLabel: "phone" };
+	it("reports stale with the stored draft", async () => {
+		const f: FetchLike = async () => reply({ draft: server({ text: "newer" }), stale: true });
+		const out = await putDraftDetailed(f, "chat-1", body, false);
+		assert.equal(out.delivered, true);
+		assert.equal(out.stale, true);
+		assert.equal(out.stored?.initial?.thinking, "newer");
+		assert.equal(out.stored?.origin, "desktop");
+	});
+	it("a fresh write is delivered, not stale, with nothing to adopt", async () => {
+		const out = await putDraftDetailed(async () => reply({ draft: server(), stale: false }), "chat-1", body, false);
+		assert.deepEqual({ d: out.delivered, s: out.stale, st: out.stored }, { d: true, s: false, st: null });
+	});
+	it("a failure is not delivered", async () => {
+		const out = await putDraftDetailed(async () => new Response("{}", { status: 500 }), "c", body, false);
+		assert.deepEqual({ d: out.delivered, s: out.stale, st: out.stored }, { d: false, s: false, st: null });
 	});
 });

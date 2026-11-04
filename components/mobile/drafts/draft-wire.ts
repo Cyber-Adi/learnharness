@@ -16,6 +16,7 @@ export interface WireDraft extends WireFields {
 
 // Mirrors src/server/remote/drafts.ts (client may not import server code).
 export const DRAFT_MAX_BYTES = 32 * 1024;
+export const SELECTION_MAX_BYTES = 24 * 1024;
 const TEXT_MAX_CHARS = 16000;
 
 export const ServerDraft = z.object({
@@ -62,15 +63,64 @@ export const fromWire = (draft: ServerDraft): SheetDraft => ({
 	thinking: draft.text,
 });
 
-/** Fit the body under the server's caps: truncate thinking, never send an invalid body. */
+const encoder = new TextEncoder();
+const byteLen = (v: unknown): number => encoder.encode(JSON.stringify(v) ?? "").length;
+const SELECTION_STRINGS = ["text", "other", "readingThinking"] as const;
+
+const cut = (value: string, drop: number): string => {
+	const next = value.slice(0, Math.max(0, value.length - drop));
+	return /[\ud800-\udbff]$/.test(next) ? next.slice(0, -1) : next;
+};
+
+interface Fields {
+	readonly thinking: string;
+	readonly sel: Readonly<Record<string, unknown>> | null;
+}
+
+const asRecord = (v: unknown): Readonly<Record<string, unknown>> | null =>
+	typeof v === "object" && v !== null && !Array.isArray(v) ? (v as Record<string, unknown>) : null;
+
+const assemble = (wire: WireDraft, f: Fields): WireDraft => ({ ...wire, text: f.thinking, selection: f.sel ?? wire.selection });
+
+/** Longest trimmable string among thinking and the selection's text fields, or null when all are empty. */
+function longest(f: Fields): { readonly name: "thinking" | (typeof SELECTION_STRINGS)[number]; readonly len: number; readonly value: string } | null {
+	let best: { name: "thinking" | (typeof SELECTION_STRINGS)[number]; len: number; value: string } | null = null;
+	const consider = (name: "thinking" | (typeof SELECTION_STRINGS)[number], value: unknown): void => {
+		if (typeof value === "string" && value.length > 0 && (best === null || value.length > best.len)) best = { name, len: value.length, value };
+	};
+	consider("thinking", f.thinking);
+	for (const k of SELECTION_STRINGS) consider(k, f.sel?.[k]);
+	return best;
+}
+
+function trim(f: Fields, name: string, drop: number): Fields {
+	if (name === "thinking") return { ...f, thinking: cut(f.thinking, drop) };
+	const current = f.sel?.[name];
+	return typeof current === "string" ? { ...f, sel: { ...f.sel, [name]: cut(current, drop) } } : f;
+}
+
+/**
+ * Fit the body under the server's caps (whole body DRAFT_MAX_BYTES, selection SELECTION_MAX_BYTES):
+ * truncate every string field, longest first, never send an invalid body.
+ */
 export function fitWire(wire: WireDraft): WireDraft {
-	let text = wire.text.slice(0, TEXT_MAX_CHARS);
-	const bytes = (t: string): number => Buffer.byteLength(JSON.stringify({ ...wire, text: t }));
-	const over = bytes(text) - DRAFT_MAX_BYTES;
-	// Each removed char frees at least one byte, so cutting `over` chars always fits.
-	if (over > 0) text = text.slice(0, Math.max(0, text.length - over));
-	if (/[\ud800-\udbff]$/.test(text)) text = text.slice(0, -1);
-	return text === wire.text ? wire : { ...wire, text };
+	let f: Fields = { thinking: wire.text.slice(0, TEXT_MAX_CHARS), sel: asRecord(wire.selection) };
+	for (const k of SELECTION_STRINGS) {
+		const v = f.sel?.[k];
+		if (typeof v === "string" && v.length > TEXT_MAX_CHARS) f = trim(f, k, v.length - TEXT_MAX_CHARS);
+	}
+	for (;;) {
+		const over = Math.max(byteLen(assemble(wire, f)) - DRAFT_MAX_BYTES, byteLen(f.sel ?? wire.selection) - SELECTION_MAX_BYTES);
+		if (over <= 0) break;
+		const target = longest(f);
+		// Nothing left to trim: a non-string payload is too big, so drop the selection rather than send a bad body.
+		if (target === null) return { ...wire, text: f.thinking, selection: null };
+		// Cut by the field's own bytes-per-char so multibyte text is not over-trimmed.
+		const perChar = Math.max(1, byteLen(target.value) / target.len);
+		f = trim(f, target.name, Math.max(1, Math.min(target.len, Math.ceil(over / perChar))));
+	}
+	const out = assemble(wire, f);
+	return out.text === wire.text && out.selection === wire.selection ? wire : out;
 }
 
 const DesktopSelection = z.object({

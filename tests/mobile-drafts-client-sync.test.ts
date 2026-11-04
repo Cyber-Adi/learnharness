@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { createDraftSync } from "../components/mobile/drafts/draft-sync.ts";
+import { createDraftSync, createSyncLifecycle } from "../components/mobile/drafts/draft-sync.ts";
 import { DRAFT_MAX_BYTES, type WireFields } from "../components/mobile/drafts/draft-wire.ts";
 import { fakeClock, recorder } from "./mobile-drafts-client-helpers.ts";
 
@@ -146,5 +146,85 @@ describe("draft sync scheduler (SYNC-4)", () => {
 		await sync.flush("hidden");
 		clock.advance(2000);
 		assert.equal(rec.calls.length, 0);
+	});
+});
+
+describe("draft sync stale and clear (G2)", () => {
+	const stored = { initial: { selection: null, confidenceIndex: 2, thinking: "from desktop" }, origin: "desktop" } as const;
+
+	it("a stale write adopts the stored draft instead of dropping silently", async () => {
+		const clock = fakeClock();
+		const adopted: unknown[] = [];
+		const sync = createDraftSync({
+			send: async () => ({ delivered: true, stale: true, stored }),
+			now: clock.now,
+			setTimer: clock.setTimer,
+			clearTimer: clock.clearTimer,
+			onStale: (s) => adopted.push(s),
+		});
+		sync.update(fields("older"));
+		await sync.flush("hidden");
+		assert.deepEqual(adopted, [stored]);
+		await sync.flush("hidden");
+		assert.equal(adopted.length, 1, "nothing stays dirty after a stale answer");
+	});
+
+	it("a PUT in flight when clear runs cannot leave a draft behind", async () => {
+		const clock = fakeClock();
+		const events: string[] = [];
+		const adopted: unknown[] = [];
+		let release: (v: boolean) => void = () => undefined;
+		const sync = createDraftSync({
+			send: () => {
+				events.push("put-start");
+				return new Promise<boolean>((resolve) => {
+					release = (v) => {
+						events.push("put-end");
+						resolve(v);
+					};
+				});
+			},
+			now: clock.now,
+			setTimer: clock.setTimer,
+			clearTimer: clock.clearTimer,
+			onStale: (s) => adopted.push(s),
+		});
+		sync.update(fields("typed"));
+		void sync.flush("send");
+		const cleared = sync.clear(async () => {
+			events.push("delete");
+			return true;
+		});
+		assert.equal(clock.pending(), 0, "idle timer cancelled");
+		await Promise.resolve();
+		assert.deepEqual(events, ["put-start"], "delete waits for the PUT");
+		release(true);
+		await cleared;
+		assert.deepEqual(events, ["put-start", "put-end", "delete"]);
+		await sync.flush("hidden");
+		assert.equal(events.filter((e) => e === "put-start").length, 1, "nothing resurrected after clear");
+		assert.equal(adopted.length, 0);
+	});
+
+	it("the hook keeps syncing after a StrictMode remount", async () => {
+		const made: string[] = [];
+		const life = createSyncLifecycle(() => {
+			const id = `sync-${made.length + 1}`;
+			made.push(id);
+			const sent: string[] = [];
+			const clock = fakeClock();
+			const sync = createDraftSync({ send: async (b) => (sent.push(b.text), true), now: clock.now, setTimer: clock.setTimer, clearTimer: clock.clearTimer });
+			return Object.assign(sync, { sent });
+		});
+		const detach1 = life.attach();
+		detach1(); // StrictMode disposes the first effect run
+		const detach2 = life.attach();
+		life.update(fields("after remount"));
+		await life.flush("hidden");
+		assert.equal(made.length, 2, "a fresh scheduler per effect run");
+		assert.equal((life.current() as unknown as { sent: string[] }).sent[0], "after remount");
+		detach2();
+		life.update(fields("ignored"));
+		assert.equal(life.current(), null);
 	});
 });

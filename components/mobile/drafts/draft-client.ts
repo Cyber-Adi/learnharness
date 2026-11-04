@@ -30,13 +30,33 @@ export async function loadDraft(fetchFn: FetchLike, chatId: string, toolCallId: 
 	}
 }
 
-export async function putDraft(fetchFn: FetchLike, chatId: string, body: WireDraft, keepalive: boolean): Promise<boolean> {
+export interface PutResult {
+	readonly delivered: boolean;
+	/** The server kept a newer copy; `stored` is that copy so the caller can adopt it. */
+	readonly stale: boolean;
+	readonly stored: LoadedDraft | null;
+}
+const PutEnvelope = z.object({ ok: z.literal(true), data: z.object({ draft: ServerDraft, stale: z.boolean() }) });
+const FAILED: PutResult = Object.freeze({ delivered: false, stale: false, stored: null });
+
+export async function putDraftDetailed(fetchFn: FetchLike, chatId: string, body: WireDraft, keepalive: boolean): Promise<PutResult> {
 	try {
 		const res = await fetchFn(base(chatId), { method: "PUT", keepalive, headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
-		return OkEnvelope.safeParse(await okJson(res)).success;
+		const json = await okJson(res);
+		const full = PutEnvelope.safeParse(json);
+		if (full.success) {
+			const { draft, stale } = full.data.data;
+			return { delivered: true, stale, stored: stale ? { initial: fromWire(draft), origin: draft.deviceLabel } : null };
+		}
+		return OkEnvelope.safeParse(json).success ? { delivered: true, stale: false, stored: null } : FAILED;
 	} catch {
-		return false;
+		return FAILED;
 	}
+}
+
+/** Boolean form kept for the desktop bridge. */
+export async function putDraft(fetchFn: FetchLike, chatId: string, body: WireDraft, keepalive: boolean): Promise<boolean> {
+	return (await putDraftDetailed(fetchFn, chatId, body, keepalive)).delivered;
 }
 
 export async function deleteDraft(fetchFn: FetchLike, chatId: string, toolCallId: string): Promise<boolean> {

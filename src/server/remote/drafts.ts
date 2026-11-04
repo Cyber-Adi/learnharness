@@ -5,7 +5,11 @@ import { z } from "zod";
 /** Same rule as upstream's chat-store id check (src/store/chats.ts). */
 const CHAT_ID = /^[A-Za-z0-9_-]{1,128}$/;
 export const DRAFT_MAX_BYTES = 32 * 1024;
-const SELECTION_MAX_BYTES = 8 * 1024;
+// Text answers ride inside `selection`, so this must hold a 16000-char answer.
+// Mirrored by SELECTION_MAX_BYTES in components/mobile/drafts/draft-wire.ts.
+const SELECTION_MAX_BYTES = 24 * 1024;
+// A far-future client clock must not pin a draft past this window.
+const FUTURE_SKEW_MS = 5 * 60 * 1000;
 const sizeOf = (v: unknown): number => Buffer.byteLength(JSON.stringify(v) ?? "");
 
 export const DraftInput = z.strictObject({
@@ -55,14 +59,12 @@ export function saveDraft(dir: string, chatId: string, input: unknown, now: () =
 	const parsed = DraftInput.safeParse(input);
 	if (!parsed.success) return { ok: false, code: "invalid_input" };
 	const stored = readStored(dir, chatId);
-	if (
-		stored !== null &&
-		stored.toolCallId === parsed.data.toolCallId &&
-		Date.parse(parsed.data.clientUpdatedAt) < Date.parse(stored.clientUpdatedAt)
-	) {
+	const ceiling = now() + FUTURE_SKEW_MS;
+	const clientMs = Math.min(Date.parse(parsed.data.clientUpdatedAt), ceiling);
+	if (stored !== null && stored.toolCallId === parsed.data.toolCallId && clientMs < Date.parse(stored.clientUpdatedAt)) {
 		return { ok: true, draft: stored, stale: true };
 	}
-	const draft: Draft = { ...parsed.data, savedAt: new Date(now()).toISOString() };
+	const draft: Draft = { ...parsed.data, clientUpdatedAt: new Date(clientMs).toISOString(), savedAt: new Date(now()).toISOString() };
 	writeAtomic(dir, chatId, draft);
 	return { ok: true, draft, stale: false };
 }

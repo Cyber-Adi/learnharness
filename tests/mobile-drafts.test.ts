@@ -79,7 +79,7 @@ describe("draft store (SYNC-4)", () => {
 			draft({ clientUpdatedAt: "yesterday" }),
 			draft({ deviceLabel: "tablet" }),
 			draft({ extra: 1 }),
-			draft({ selection: { blob: "y".repeat(9000) } }),
+			draft({ selection: { blob: "y".repeat(25000) } }),
 			null,
 			"text",
 		];
@@ -118,5 +118,22 @@ describe("draft store (SYNC-4)", () => {
 		assert.equal(clearDraft(dir, "chat-1", "call-other"), false);
 		assert.ok(getDraft(dir, "chat-1", "call-1"));
 		assert.equal(clearDraft(dir, "chat-1", "call-1"), true);
+	});
+});
+
+describe("draft store limits (G2)", () => {
+	it("a 12000-character text answer still syncs", () => {
+		const sel = { selected: [], otherSelected: false, dontKnow: false, other: "", text: "x".repeat(12000) };
+		const res = saveDraft(dir, "chat-1", draft({ selection: sel }), now);
+		assert.ok(res.ok, "a selection over 8 KB must be accepted up to the documented cap");
+	});
+
+	it("a far-future clientUpdatedAt cannot block later writes", () => {
+		const first = saveDraft(dir, "chat-1", draft({ text: "pinned", clientUpdatedAt: "2099-01-01T00:00:00.000Z" }), now);
+		assert.ok(first.ok);
+		const later = () => NOW + 6 * 60 * 1000;
+		const second = saveDraft(dir, "chat-1", draft({ text: "real", clientUpdatedAt: new Date(later()).toISOString() }), later);
+		assert.ok(second.ok && !second.stale, "a legitimate later write must win");
+		assert.equal(getDraft(dir, "chat-1", "call-1")?.text, "real");
 	});
 });
