@@ -33,7 +33,7 @@ export function PendingSheet({ chatId, pending, open, onOpenChange, submitAnswer
 
 	if (!qd) return null
 	const onSubmit = (form: SheetForm) =>
-		submitSheet({
+		void submitSheet({
 			qd,
 			tool: pending.tool,
 			toolCallId: pending.toolCallId,
@@ -42,6 +42,7 @@ export function PendingSheet({ chatId, pending, open, onOpenChange, submitAnswer
 			draft,
 			submitAnswer,
 			close: () => onOpenChange(false),
+			reopen: () => onOpenChange(true),
 		})
 
 	return (

@@ -10,9 +10,10 @@ export function pendingFor(view: readonly LhViewMessage[], native: readonly LhMe
 }
 
 // Mirrors the desktop dock's canSubmit rule.
-export function answerValid(question: { readonly mode: string }, selection: SheetSelection, otherText: string): boolean {
+export function answerValid(question: { readonly mode: string }, selection: SheetSelection, otherText: string, optionCount: number = Number.POSITIVE_INFINITY): boolean {
 	if (question.mode === "text") return otherText.trim().length > 0
-	return selection.dontKnow || (selection.otherSelected && otherText.trim().length > 0) || selection.selected.length > 0
+	const listed = selection.selected.filter((i) => i < optionCount).length
+	return selection.dontKnow || (selection.otherSelected && otherText.trim().length > 0) || listed > 0
 }
 
 export type ForegroundDecision = "adopt" | "adopt-and-resume" | "none"
@@ -54,4 +55,27 @@ export type SessionKind = "teach" | "practice"
 
 export function kindLabel(kind: SessionKind | undefined): string | null {
 	return kind === "practice" ? "Practice" : null
+}
+
+const answeredCalls = (messages: readonly LhMessage[]): Set<string> =>
+	new Set(messages.filter((m) => m.role === "toolResult").map((m) => (m as { toolCallId: string }).toolCallId))
+
+// A local answer the server record does not yet hold is still awaiting confirmation: adopting an older record would erase it.
+export function shouldAdoptRecord(local: readonly LhMessage[], record: readonly LhMessage[]): boolean {
+	const held = answeredCalls(record)
+	for (const id of answeredCalls(local)) if (!held.has(id)) return false
+	return true
+}
+
+export const FETCH_RETRY_BASE_MS = 1000
+export const FETCH_MAX_RETRIES = 3
+
+// Backoff 1 s, 2 s, 4 s; stops early when a newer sync has superseded this one.
+export async function fetchWithRetry<T>(run: () => Promise<T | null>, sleep: (ms: number) => Promise<void>, live: () => boolean): Promise<T | null> {
+	for (let attempt = 0; ; attempt++) {
+		const out = await run()
+		if (out !== null || attempt >= FETCH_MAX_RETRIES || !live()) return out
+		await sleep(FETCH_RETRY_BASE_MS * 2 ** attempt)
+		if (!live()) return null
+	}
 }

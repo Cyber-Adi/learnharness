@@ -19,7 +19,7 @@ export interface DraftHandle {
 	clear(): void
 }
 
-export type SubmitAnswerFn = (tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string) => void
+export type SubmitAnswerFn = (tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string) => Promise<boolean>
 
 // Mirrors the desktop dock's QuestionData assembly (same shuffle seed, so option order matches).
 // Returns null for malformed model input, like the dock's quiet fallback.
@@ -75,13 +75,30 @@ export interface SubmitDeps {
 	readonly draft: DraftHandle
 	readonly submitAnswer: SubmitAnswerFn
 	readonly close: () => void
+	/** Called when the answer was refused: the sheet comes back with the form intact. */
+	readonly reopen: () => void
 }
 
-// flush -> submit -> clear: the last keystrokes reach the server before the draft is deleted.
-export function submitSheet(deps: SubmitDeps): void {
+// flush -> submit -> clear only once accepted: a refused answer keeps the draft and reopens the sheet.
+export async function submitSheet(deps: SubmitDeps): Promise<void> {
 	const answer = buildAnswer(deps.qd, answerRequestOf(deps.qd, deps.form), deps.tool)
 	deps.draft.flush("send")
-	deps.submitAnswer(deps.tool, deps.toolCallId, answer, deps.questionKey)
-	deps.draft.clear()
-	deps.close()
+	let accepted = false
+	try {
+		const result = deps.submitAnswer(deps.tool, deps.toolCallId, answer, deps.questionKey)
+		deps.close()
+		accepted = await result
+	} catch {
+		accepted = false
+	}
+	if (accepted) deps.draft.clear()
+	else deps.reopen()
+}
+
+type RawSubmit = (tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string) => unknown
+
+// useChatSession().submitAnswer returns Promise<boolean> (true when the answer POST was accepted).
+// Until that lands everywhere, a void return is treated as refused so a draft is never lost.
+export function toSubmitAnswerFn(raw: RawSubmit): SubmitAnswerFn {
+	return async (tool, toolCallId, output, questionKey) => (await Promise.resolve(raw(tool, toolCallId, output, questionKey))) === true
 }

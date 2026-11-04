@@ -53,9 +53,11 @@ for (const project of PHONES) {
 		await expect(dialog.getByRole("radio", { name: "90", exact: true })).toHaveAttribute("aria-checked", "true")
 
 		await dialog.getByRole("button", { name: "Submit" }).click()
-		await expect(dialog).toBeHidden()
-		// No provider in e2e: assert the optimistic answer, not a teacher reply.
-		await expect(page.getByTestId("transcript")).toContainText("Mercury")
+		// No provider in e2e, so the answer POST is refused after the optimistic append. The draft must
+		// survive: the sheet comes back with the typed form intact instead of losing the answer.
+		await expect(dialog).toBeVisible()
+		await expect(dialog.getByLabel("Your thinking")).toHaveValue("Mercury orbits closest to the sun")
+		await expect(dialog.getByRole("radio", { name: "Mercury" })).toHaveAttribute("aria-checked", "true")
 	})
 }
 

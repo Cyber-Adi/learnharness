@@ -27,11 +27,11 @@ export interface QuestionSheetProps {
 const FIELD = "w-full rounded-[var(--lh-m-radius-control,12px)] border bg-transparent px-3 py-2 text-[17px]"
 
 export function QuestionSheet({ open, onOpenChange, qd, initial, origin, onDraftChange, onSubmit, haptics, portal, reducedMotion }: QuestionSheetProps) {
-	const { form, patch } = useSheetForm({ initial, onDraftChange })
+	const { form, patch } = useSheetForm({ initial, optionCount: qd.options.length, onDraftChange })
 	const text = qd.mode === "text"
 	const multi = qd.mode === "multi-select"
 	const mode = multi ? "multi-select" : "single-select"
-	const valid = answerValid(qd, form.selection, text ? form.text : form.other)
+	const valid = answerValid(qd, form.selection, text ? form.text : form.other, qd.options.length)
 	const picked = new Set(form.selection.selected)
 	const select = (selection: SheetForm["selection"]) => patch({ selection })
 

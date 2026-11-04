@@ -4,6 +4,7 @@ import { useCallback, useMemo, useState } from "react"
 import { useChatSession } from "@/components/session"
 import type { LhMessage } from "@/src/core"
 import { notify } from "../toast/toast.ts"
+import { toSubmitAnswerFn } from "./question-model.ts"
 import { PendingSheet } from "./pending-sheet.tsx"
 import { makeAnsweredElsewhere, pendingFor } from "./session-logic.ts"
 import type { SessionKind } from "./session-logic.ts"
@@ -33,11 +34,12 @@ export function MobileSession({ chatId, title, kind, initialMessages, initialErr
 		onAnsweredElsewhere: useMemo(() => makeAnsweredElsewhere({ close: closeSheet, notifier: notify }), [closeSheet]),
 	}
 	const session = useChatSession(options)
-	useForegroundSync({ chatId, setMessages: session.setMessages, resumeStream: session.resumeStream, setReattachSettled: session.setReattachSettled })
+	useForegroundSync({ chatId, getLocal: () => session.nativeMessages, setMessages: session.setMessages, resumeStream: session.resumeStream, setReattachSettled: session.setReattachSettled })
 
 	const pending = pendingFor(session.messages, session.nativeMessages)
 	const running = session.status === "submitted" || session.status === "streaming"
 	const stick = useStickToBottom(session.messages)
+	const submitAnswer = useMemo(() => toSubmitAnswerFn(session.submitAnswer), [session.submitAnswer])
 	const open = sheetOpen && pending !== null
 
 	return (
@@ -55,7 +57,7 @@ export function MobileSession({ chatId, title, kind, initialMessages, initialErr
 			atBottom={stick.atBottom}
 			onJumpLatest={stick.jump}
 		>
-			{pending ? <PendingSheet key={pending.key} chatId={chatId} pending={pending} open={open} onOpenChange={setSheetOpen} submitAnswer={session.submitAnswer} /> : null}
+			{pending ? <PendingSheet key={pending.key} chatId={chatId} pending={pending} open={open} onOpenChange={setSheetOpen} submitAnswer={submitAnswer} /> : null}
 		</SessionView>
 	)
 }

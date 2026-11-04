@@ -73,10 +73,13 @@ function clampConfidence(index: number | null): number {
 }
 
 // A draft is external input (server, other device): parse, never cast.
-export function formFromDraft(draft: SheetDraft | null): SheetForm {
+// optionCount drops indices the question does not have (a draft may come from another device or an older question).
+export function formFromDraft(draft: SheetDraft | null, optionCount: number = Number.POSITIVE_INFINITY): SheetForm {
 	if (!draft) return emptyForm()
 	const parsed = sheetSelectionSchema.safeParse(draft.selection)
-	const selection = parsed.success ? parsed.data : emptySelection()
+	const base = parsed.success ? parsed.data : emptySelection()
+	const selected = [...new Set(base.selected.filter((i) => i < optionCount))].sort((a, b) => a - b)
+	const selection = { ...base, selected }
 	return {
 		selection,
 		other: selection.other ?? "",

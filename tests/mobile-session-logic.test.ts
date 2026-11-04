@@ -2,7 +2,7 @@ import assert from "node:assert/strict"
 import { describe, it } from "node:test"
 import { projectView } from "../src/core/view.ts"
 import type { LhMessage } from "../src/core/native-messages.ts"
-import { answerValid, onForeground, pendingFor, stickToBottom } from "../components/mobile/session/session-logic.ts"
+import { answerValid, fetchWithRetry, onForeground, pendingFor, shouldAdoptRecord, stickToBottom } from "../components/mobile/session/session-logic.ts"
 import { emptySelection } from "../components/mobile/session/sheet-draft.ts"
 
 const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } }
@@ -75,5 +75,48 @@ describe("stickToBottom", () => {
 	})
 	it("stops following when the learner scrolls up", () => {
 		assert.equal(stickToBottom(200, 1000, 500), false)
+	})
+})
+
+const result = (id: string, callId: string): LhMessage => ({ id, role: "toolResult", toolCallId: callId, toolName: "quiz", content: [], isError: false, timestamp: 2 }) as unknown as LhMessage
+
+describe("shouldAdoptRecord", () => {
+	it("foreground resync keeps an optimistic answer", () => {
+		const local = [quiz("c1"), result("local-1", "c1")]
+		assert.equal(shouldAdoptRecord(local, [quiz("c1")]), false)
+	})
+	it("adopts a record that confirms the local answer", () => {
+		assert.equal(shouldAdoptRecord([quiz("c1"), result("local-1", "c1")], [quiz("c1"), result("srv-1", "c1")]), true)
+	})
+	it("adopts when there is no local answer", () => {
+		assert.equal(shouldAdoptRecord([quiz("c1")], [quiz("c1")]), true)
+	})
+})
+
+describe("fetchWithRetry", () => {
+	const never = () => true
+	it("a failed foreground fetch retries with 1s, 2s, 4s backoff", async () => {
+		const sleeps: number[] = []
+		let calls = 0
+		const out = await fetchWithRetry(async () => (++calls < 4 ? null : "ok"), async (ms) => void sleeps.push(ms), never)
+		assert.equal(out, "ok")
+		assert.deepEqual(sleeps, [1000, 2000, 4000])
+	})
+	it("gives up after three retries", async () => {
+		let calls = 0
+		const out = await fetchWithRetry(async () => (calls++, null), async () => {}, never)
+		assert.equal(out, null)
+		assert.equal(calls, 4)
+	})
+	it("stops retrying once superseded", async () => {
+		let calls = 0
+		const out = await fetchWithRetry(async () => (calls++, null), async () => {}, () => false)
+		assert.equal(out, null)
+		assert.equal(calls, 1)
+	})
+	it("does not retry a success", async () => {
+		let calls = 0
+		await fetchWithRetry(async () => (calls++, "x"), async () => assert.fail("no sleep"), never)
+		assert.equal(calls, 1)
 	})
 })
