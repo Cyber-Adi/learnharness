@@ -1,12 +1,12 @@
 "use client";
 
 import { pendingQuestionOf, type LhMessage } from "@/src/core";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type { SessionModel } from "@/components/session-core";
 import { createDesktopBridge, type DesktopBridge } from "./desktop-bridge.ts";
 
 /** SYNC-4 desktop side: push the dock's drafts to the server, pull a phone draft into the dock. */
-export function useDesktopDraftBridge(model: SessionModel, chatId: string, messages: readonly LhMessage[], enabled: boolean, onSeeded: () => void): void {
+export function useDesktopDraftBridge(model: SessionModel, chatId: string, messages: readonly LhMessage[], enabled: boolean, onSeeded: () => void): (toolCallId: string) => void {
 	const bridgeRef = useRef<DesktopBridge | null>(null);
 	const onSeededRef = useRef(onSeeded);
 	onSeededRef.current = onSeeded;
@@ -47,4 +47,6 @@ export function useDesktopDraftBridge(model: SessionModel, chatId: string, messa
 			.seed({ key, toolCallId, get: (k) => model.questionDraft(k), save: (k, d) => model.saveQuestionDraft(k, d) })
 			.then((seeded) => seeded && onSeededRef.current());
 	}, [enabled, model, key, toolCallId]);
+
+	return useCallback((id: string) => void bridgeRef.current?.clearDraft(id), []);
 }

@@ -5,6 +5,7 @@ import { ArrowDownIcon, ChevronRightIcon, PlayIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { finishDictation, isDictationActive, joinDictation, useDictationTarget } from "@/components/dictation";
 import { useEnterSubmits } from "@/components/enter-submits";
+import { createDockDraftReporter, type DockDraftReporter } from "@/components/mobile/drafts/dock-draft-reporter"; // SYNC-4 (mobile fork)
 import { PathInput } from "@/components/path-input";
 import { ToolContentResponse } from "@/components/ai-elements/message";
 import { cn } from "@/lib/utils";
@@ -341,6 +342,24 @@ function QuestionDockForm({
 	const [confIdx, setConfIdx] = useState<number>(initialDraft?.confidenceIndex ?? DEFAULT_CONFIDENCE_INDEX);
 	const selectMode: SelectMode = qd.mode === "multi-select" ? "multi-select" : "single-select";
 
+	// SYNC-4 (mobile fork): report edits (not the mount) so the draft tracks typing, not only submit.
+	const onSaveDraftRef = useRef(onSaveDraft);
+	onSaveDraftRef.current = onSaveDraft;
+	const reporterRef = useRef<DockDraftReporter | null>(null);
+	const lastFormRef = useRef({ sel, thinking, other, text, confIdx });
+	useEffect(() => {
+		const reporter = (reporterRef.current ??= createDockDraftReporter({
+			save: (form) => onSaveDraftRef.current?.(form),
+			setTimer: (fn, ms) => setTimeout(fn, ms),
+			clearTimer: (h) => clearTimeout(h as ReturnType<typeof setTimeout>),
+		}));
+		const prev = lastFormRef.current;
+		if (prev.sel === sel && prev.thinking === thinking && prev.other === other && prev.text === text && prev.confIdx === confIdx) return;
+		lastFormRef.current = { sel, thinking, other, text, confIdx };
+		reporter.report({ selection: { ...sel, selected: new Set(sel.selected) }, thinking, other, text, confidenceIndex: confIdx });
+	}, [sel, thinking, other, text, confIdx]);
+	useEffect(() => () => reporterRef.current?.dispose(), []);
+
 	// The PRIMARY dictation input (owner, STT round 1): while a question
 	// waits, dictated finals land HERE, never in the hidden composer — text
 	// mode owns "Your answer", select modes own "Your thinking". The claim
@@ -404,6 +423,7 @@ function QuestionDockForm({
 		};
 		// Snapshot before optimistic submission unmounts the form. Ref values
 		// include the dictation finals that just landed, unlike stale closures.
+		reporterRef.current?.dispose(); // SYNC-4 (mobile fork): flush any debounced edit before the final snapshot
 		onSaveDraft?.({
 			selection: { ...sel, selected: new Set(sel.selected) },
 			thinking: thinkingTextRef.current,

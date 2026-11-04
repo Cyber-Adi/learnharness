@@ -95,7 +95,7 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 	// seed bumps draftSeedVersion, which the dock is keyed on.
 	const [draftSeedVersion, seedBump] = useReducer((n: number) => n + 1, 0);
 	const onDraftSeeded = useCallback(() => { seedBump(); bump(); }, [bump]);
-	useDesktopDraftBridge(model, chatId, state.nativeMessages, syncDraftsAs === "desktop", onDraftSeeded);
+	const clearDraft = useDesktopDraftBridge(model, chatId, state.nativeMessages, syncDraftsAs === "desktop", onDraftSeeded);
 
 	// THE TURN-STATE BROADCAST (owner, sidebar round 2026-10-02): the same
 	// optimistic machine, propagated — the instant a turn starts locally
@@ -127,9 +127,12 @@ export function useChatSession({ chatId, initialMessages, initialError, initiall
 	const continueIfOwed = useCallback((record: readonly LhMessage[]) => void model.continueIfOwed(record), [model]);
 	const steer = useCallback((text: string) => void model.steer(text), [model]);
 	const submitAnswer = useCallback(
-		(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string) =>
-			void model.submitAnswer(tool, toolCallId, output, questionKey),
-		[model],
+		async (tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string): Promise<boolean> => {
+			const accepted = await model.submitAnswer(tool, toolCallId, output, questionKey); // SYNC-4 (mobile fork): resolves accepted
+			if (accepted) clearDraft(toolCallId);
+			return accepted;
+		},
+		[model, clearDraft],
 	);
 	const dismissQuestion = useCallback(
 		(toolCallId: string, answer: QuestionAnswerData, questionKey?: string) => void model.dismissQuestion(toolCallId, answer, questionKey),

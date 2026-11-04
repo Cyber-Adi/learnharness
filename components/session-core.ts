@@ -880,9 +880,9 @@ export class SessionModel {
 
 	/** The answer path (the dock): the answer IS the question call's tool
 	 *  result (fork 1), riding as its input event. */
-	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string): Promise<void> {
+	submitAnswer(tool: string, toolCallId: string, output: QuestionAnswerData, questionKey?: string): Promise<boolean> {
 		void tool;
-		return this.send({ type: "answer", toolCallId, answer: output }, undefined, questionKey).then(() => undefined);
+		return this.send({ type: "answer", toolCallId, answer: output }, undefined, questionKey); // SYNC-4 (mobile fork): resolves accepted
 	}
 
 	/** The dismissal path (owner design 2026-10-03, "A2"): the skipped

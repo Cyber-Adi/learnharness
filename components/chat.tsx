@@ -82,6 +82,7 @@ import {
 	toolQuestionKind,
 	questionNeedsReveal,
 } from "@/src/core";
+import { desktopDraftSyncMode } from "@/components/mobile/drafts/desktop-bridge"; // SYNC-4 (mobile fork)
 import { ReadingThinkingField } from "@/components/reading-thinking";
 import { currentUserThinkingOpen, setAllUserThinkingOpen } from "@/components/thinking-block";
 
@@ -256,7 +257,7 @@ export function Chat({
 	// ({chatId, input} — the stash indirection died with the SDK), and the
 	// turn stream is the VERBATIM AgentEvent passthrough the server emits.
 	const { messages, nativeMessages, hasConfirmedConversation, contextTokens, send, continueIfOwed, steer, steerQueue, submitAnswer, dismissQuestion, dismissProblem, questionDraft, saveQuestionDraft, setMessages, adoptRecord, status, error, stop, clearError, resumeStream, setReattachSettled, draftSeedVersion } =
-		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight, syncDraftsAs: "desktop" }); // SYNC-4 (mobile fork)
+		useChatSession({ chatId, initialMessages, initialError, initiallyInFlight, syncDraftsAs: desktopDraftSyncMode(process.env.NEXT_PUBLIC_LH_MOBILE_SHELL) }); // SYNC-4 (mobile fork)
 
 	const sessionFindScopeRef = useRef<HTMLDivElement | null>(null);
 	const scrollContextRef = useRef<StickToBottomContext | null>(null);

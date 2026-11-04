@@ -1,5 +1,5 @@
 import type { QuestionDraft } from "@/src/core";
-import { loadDraft, putDraft, type FetchLike } from "./draft-client.ts";
+import { deleteDraft, loadDraft, putDraft, type FetchLike } from "./draft-client.ts";
 import { createDraftSync, type DraftSync, type FlushReason } from "./draft-sync.ts";
 import { fromDesktopDraft, toDesktopDraft, toWireFields } from "./draft-wire.ts";
 
@@ -20,6 +20,7 @@ export interface DesktopBridge {
 	readonly sync: DraftSync;
 	onQuestionDraft(key: string, toolCallId: string, draft: QuestionDraft): void;
 	seed(req: SeedRequest): Promise<boolean>;
+	clearDraft(toolCallId: string): Promise<void>;
 	flush(reason: FlushReason): void;
 	dispose(): void;
 }
@@ -33,17 +34,19 @@ export function createDesktopBridge(deps: DesktopBridgeDeps): DesktopBridge {
 		clearTimer: deps.clearTimer,
 	});
 	let seeding = false;
+	const touched = new Set<string>(); // calls the learner has edited since mount: never reseeded
 	return {
 		sync,
 		onQuestionDraft(_key, toolCallId, draft) {
 			if (seeding) return; // a phone draft landing in the dock is not a desktop edit
+			touched.add(toolCallId);
 			const sheet = fromDesktopDraft(draft);
 			if (sheet) sync.update(toWireFields(sheet, toolCallId, "desktop"));
 		},
 		async seed(req) {
-			if (req.get(req.key)) return false;
+			if (req.get(req.key) || touched.has(req.toolCallId)) return false;
 			const { initial, origin } = await loadDraft(deps.fetchFn, deps.chatId, req.toolCallId);
-			if (initial === null || origin !== "phone" || req.get(req.key)) return false;
+			if (initial === null || origin !== "phone" || req.get(req.key) || touched.has(req.toolCallId)) return false;
 			seeding = true;
 			try {
 				req.save(req.key, toDesktopDraft(initial));
@@ -52,7 +55,16 @@ export function createDesktopBridge(deps: DesktopBridgeDeps): DesktopBridge {
 			}
 			return true;
 		},
+		async clearDraft(toolCallId) {
+			sync.reset();
+			await deleteDraft(deps.fetchFn, deps.chatId, toolCallId);
+		},
 		flush: (reason) => void sync.flush(reason),
 		dispose: () => sync.dispose(),
 	};
+}
+
+/** The bridge runs only inside the mobile-shell build; flag-off desktops make no draft calls. */
+export function desktopDraftSyncMode(flag: string | undefined): "desktop" | undefined {
+	return flag === "1" ? "desktop" : undefined;
 }
