@@ -6,8 +6,8 @@ import { REPLY_MAX_CHARS, canSend, shouldSendOnKey } from "./reply-model.ts"
 export interface ReplyBarProps {
 	/** A turn is running: the box stays editable, Send waits. */
 	readonly busy: boolean
-	/** Resolves true once the server accepted the reply. */
-	readonly onSend: (text: string) => Promise<boolean>
+	/** Calls onAccepted at the server's acknowledgement; resolves true if the reply was accepted. */
+	readonly onSend: (text: string, onAccepted: () => void) => Promise<boolean>
 	readonly onFailed?: () => void
 }
 
@@ -18,6 +18,8 @@ export function ReplyBar({ busy, onSend, onFailed }: ReplyBarProps) {
 	const [text, setText] = useState("")
 	const [sending, setSending] = useState(false)
 	const ref = useRef<HTMLTextAreaElement | null>(null)
+	// Two taps in one task both see the pre-render `sending`, so the guard must be synchronous.
+	const inFlight = useRef(false)
 	const ready = canSend(text, busy || sending)
 
 	const grow = useCallback(() => {
@@ -28,16 +30,22 @@ export function ReplyBar({ busy, onSend, onFailed }: ReplyBarProps) {
 	}, [])
 
 	const submit = useCallback(async () => {
-		if (!ready) return
+		if (!ready || inFlight.current) return
+		inFlight.current = true
 		setSending(true)
-		const accepted = await onSend(text)
-		setSending(false)
-		if (!accepted) {
-			onFailed?.()
-			return
+		let cleared = false
+		// Clear at acceptance, not when the turn ends: the reply is in the transcript from then on.
+		const clear = () => {
+			if (cleared) return
+			cleared = true
+			setText("")
+			requestAnimationFrame(grow)
 		}
-		setText("")
-		requestAnimationFrame(grow)
+		const accepted = await onSend(text, clear)
+		inFlight.current = false
+		setSending(false)
+		if (accepted) clear()
+		else if (!cleared) onFailed?.()
 	}, [ready, onSend, text, onFailed, grow])
 
 	const onChange = (e: ChangeEvent<HTMLTextAreaElement>) => {

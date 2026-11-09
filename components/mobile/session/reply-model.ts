@@ -10,7 +10,8 @@ export interface TextInput {
 	readonly text: string
 }
 
-export type SendText = (input: TextInput) => Promise<boolean>
+/** Resolves once the turn settles; calls onAccepted as soon as the server acknowledges the reply. */
+export type SendText = (input: TextInput, onAccepted: () => void) => Promise<boolean>
 
 export interface KeyLike {
 	readonly key: string
@@ -32,12 +33,13 @@ export function shouldSendOnKey(e: KeyLike): boolean {
 	return e.key === "Enter" && !e.shiftKey && !e.isComposing
 }
 
-// Resolves true only when the server accepted the reply, so the caller clears the box only then.
-export async function sendReply(text: string, send: SendText): Promise<boolean> {
+// onAccepted fires at the server's acknowledgement, so the box clears then rather than when the
+// turn ends; the result is true only when the reply was accepted.
+export async function sendReply(text: string, send: SendText, onAccepted: () => void = () => {}): Promise<boolean> {
 	const trimmed = text.trim()
 	if (!canSend(trimmed, false)) return false
 	try {
-		return await send({ type: "text", text: trimmed })
+		return await send({ type: "text", text: trimmed }, onAccepted)
 	} catch {
 		return false
 	}

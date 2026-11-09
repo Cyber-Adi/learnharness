@@ -73,4 +73,27 @@ describe("sendReply", () => {
 		assert.equal(ok, false)
 		assert.equal(calls, 0)
 	})
+	it("reports acceptance as soon as the server acknowledges, before the turn finishes", async () => {
+		const events: string[] = []
+		const ok = await sendReply(
+			"hello",
+			async (_input, onAccepted) => {
+				onAccepted()
+				events.push("acked")
+				await Promise.resolve()
+				events.push("turn done")
+				return true
+			},
+			() => events.push("accepted"),
+		)
+		assert.equal(ok, true)
+		assert.deepEqual(events, ["accepted", "acked", "turn done"])
+	})
+	it("a refused send never reports acceptance", async () => {
+		let accepted = false
+		await sendReply("hello", async () => false, () => {
+			accepted = true
+		})
+		assert.equal(accepted, false)
+	})
 })

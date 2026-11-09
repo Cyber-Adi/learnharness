@@ -26,7 +26,6 @@ export const REPLY_NOT_SENT = "Not sent. Your reply is still here."
 
 type SessionOptions = Parameters<typeof useChatSession>[0]
 
-const acceptedNoop = () => {}
 const onReplyFailed = () => notify.error(REPLY_NOT_SENT)
 
 export function MobileSession({ chatId, title, kind, initialMessages, initialError, initiallyInFlight }: MobileSessionProps) {
@@ -46,9 +45,9 @@ export function MobileSession({ chatId, title, kind, initialMessages, initialErr
 	const running = session.status === "submitted" || session.status === "streaming"
 	const stick = useStickToBottom(session.messages)
 	const send = session.send
-	// Passing onAccepted puts a refused reply on the opening-message path: its optimistic bubble is
+	// Passing onAccepted (always defined) puts a refused reply on the opening-message path: its optimistic bubble is
 	// removed, so the text lives only in the box (no phantom message, no double on resend).
-	const onReply = useCallback((text: string) => sendReply(text, (input) => send(input, acceptedNoop)), [send])
+	const onReply = useCallback((text: string, onAccepted: () => void) => sendReply(text, (input, accepted) => send(input, accepted), onAccepted), [send])
 	const submitAnswer = useMemo(() => toSubmitAnswerFn(session.submitAnswer), [session.submitAnswer])
 	const open = sheetOpen && pending !== null
 

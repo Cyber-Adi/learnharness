@@ -19,8 +19,8 @@ export interface SessionViewProps {
 	readonly onScroll?: UIEventHandler<HTMLDivElement>
 	readonly atBottom?: boolean
 	readonly onJumpLatest?: () => void
-	/** Plain text reply for open questions; resolves true once accepted. */
-	readonly onReply?: (text: string) => Promise<boolean>
+	/** Plain text reply for open questions; onAccepted fires at the server's acknowledgement. */
+	readonly onReply?: (text: string, onAccepted: () => void) => Promise<boolean>
 	readonly onReplyFailed?: () => void
 	/** The question sheet. */
 	readonly children?: ReactNode
