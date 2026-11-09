@@ -1,10 +1,10 @@
 import type { ReactNode, RefObject, UIEventHandler } from "react"
 import type { LhViewMessage } from "@/src/core"
+import { ReplyBar } from "./reply-bar.tsx"
+import { bottomBar } from "./reply-model.ts"
 import { SessionHeader } from "./session-header.tsx"
 import type { SessionKind } from "./session-logic.ts"
 import { Transcript } from "./transcript.tsx"
-
-export const READ_ONLY_NOTICE = "Continue this session on your desktop."
 
 export interface SessionViewProps {
 	readonly title: string
@@ -19,6 +19,9 @@ export interface SessionViewProps {
 	readonly onScroll?: UIEventHandler<HTMLDivElement>
 	readonly atBottom?: boolean
 	readonly onJumpLatest?: () => void
+	/** Plain text reply for open questions; resolves true once accepted. */
+	readonly onReply?: (text: string) => Promise<boolean>
+	readonly onReplyFailed?: () => void
 	/** The question sheet. */
 	readonly children?: ReactNode
 }
@@ -26,7 +29,7 @@ export interface SessionViewProps {
 const BAR = "shrink-0 border-t border-current/10 px-4 pt-2"
 const BAR_STYLE = { paddingBottom: "calc(var(--lh-m-safe-bottom, env(safe-area-inset-bottom, 0px)) + 8px)" } as const
 
-// Presentational: all state and effects live in MobileSession. No composer, model menu or steer controls by design.
+// Presentational: all state and effects live in MobileSession. A plain reply box only: no model menu, steer or attachments by design.
 export function SessionView(props: SessionViewProps) {
 	const { hasPending, turnRunning, atBottom = true } = props
 	return (
@@ -47,17 +50,18 @@ export function SessionView(props: SessionViewProps) {
 					</button>
 				) : null}
 			</div>
-			{hasPending ? (
+			{bottomBar({ hasPending }) === "answer" ? (
 				<div className={BAR} style={BAR_STYLE}>
 					<button type="button" onClick={props.onOpenAnswer} className="w-full rounded-[var(--lh-m-radius-control,12px)] bg-foreground px-4 text-[17px] font-semibold text-background" style={{ minHeight: 48 }}>
 						Answer
 					</button>
 				</div>
-			) : !turnRunning ? (
-				<p data-testid="read-only-notice" className={`${BAR} text-center text-[15px] opacity-70`} style={BAR_STYLE}>
-					{READ_ONLY_NOTICE}
-				</p>
+			) : props.onReply ? (
+				<div className={BAR} style={BAR_STYLE}>
+					<ReplyBar busy={turnRunning} onSend={props.onReply} onFailed={props.onReplyFailed} />
+				</div>
 			) : null}
+
 			{props.children}
 		</div>
 	)

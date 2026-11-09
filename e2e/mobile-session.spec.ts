@@ -61,9 +61,55 @@ for (const project of PHONES) {
 	})
 }
 
-test("a finished session is read-only", async ({ page }, info) => {
+test("a session with no pending question offers a reply box", async ({ page }, info) => {
 	test.skip(info.project.name !== "iphone-13", "runs on iphone-13 only")
 	await page.goto(`/chat/${readSeed().finished}`)
-	await expect(page.getByText("Continue this session on your desktop.")).toBeVisible()
 	await expect(page.getByRole("button", { name: "Answer", exact: true })).toHaveCount(0)
+	await expect(page.getByText("Continue this session on your desktop.")).toHaveCount(0)
+	const box = page.getByRole("textbox", { name: "Reply" })
+	await expect(box).toBeVisible()
+	// Under 16px iOS zooms the page on focus.
+	expect(await box.evaluate((el) => Number.parseFloat(getComputedStyle(el).fontSize))).toBeGreaterThanOrEqual(16)
+	const send = page.getByRole("button", { name: "Send", exact: true })
+	await expect(send).toBeDisabled()
+	await box.fill("Why is Venus hotter than Mercury?")
+	await expect(send).toBeEnabled()
+})
+
+for (const project of PHONES) {
+	test(`a reply that fails to send keeps the text and adds no phantom message on ${project}`, async ({ page }, info) => {
+		test.skip(info.project.name !== project, `runs on ${project} only`)
+		await page.route("**/api/chat", (route) => (route.request().method() === "POST" ? route.abort("internetdisconnected") : route.continue()))
+		await page.goto(`/chat/${readSeed().finished}`)
+		const box = page.getByRole("textbox", { name: "Reply" })
+		const text = "Why is Venus hotter than Mercury?"
+		await box.fill(text)
+		const send = page.getByRole("button", { name: "Send", exact: true })
+		const rect = await send.boundingBox()
+		if (!rect) throw new Error("Send has no box")
+		const viewport = page.viewportSize()
+		expect(rect.y + rect.height).toBeLessThanOrEqual(viewport?.height ?? 0)
+		await send.click()
+		await expect(page.getByText("Not sent. Your reply is still here.")).toBeVisible()
+		await expect(box).toHaveValue(text)
+		// The box itself holds the text; nothing else in the session may.
+		await expect(page.getByTestId("mobile-session").getByText(text, { exact: true }).and(page.locator(":not(textarea)"))).toHaveCount(0)
+	})
+}
+
+test("an accepted reply clears the box", async ({ page }, info) => {
+	test.skip(info.project.name !== "iphone-13", "runs on iphone-13 only")
+	const posted: unknown[] = []
+	await page.route("**/api/chat", async (route) => {
+		if (route.request().method() !== "POST") return route.continue()
+		posted.push(route.request().postDataJSON())
+		await route.fulfill({ status: 200, contentType: "application/json", body: "{}" })
+	})
+	const seed = readSeed()
+	await page.goto(`/chat/${seed.finished}`)
+	const box = page.getByRole("textbox", { name: "Reply" })
+	await box.fill("  Why is Venus hotter?  ")
+	await box.press("Enter")
+	await expect(box).toHaveValue("")
+	expect(posted).toEqual([{ chatId: seed.finished, input: { type: "text", text: "Why is Venus hotter?" } }])
 })

@@ -6,6 +6,7 @@ import type { LhMessage } from "@/src/core"
 import { notify } from "../toast/toast.ts"
 import { toSubmitAnswerFn } from "./question-model.ts"
 import { PendingSheet } from "./pending-sheet.tsx"
+import { sendReply } from "./reply-model.ts"
 import { makeAnsweredElsewhere, pendingFor } from "./session-logic.ts"
 import type { SessionKind } from "./session-logic.ts"
 import { SessionView } from "./session-view.tsx"
@@ -21,7 +22,12 @@ export interface MobileSessionProps {
 	readonly initiallyInFlight?: boolean
 }
 
+export const REPLY_NOT_SENT = "Not sent. Your reply is still here."
+
 type SessionOptions = Parameters<typeof useChatSession>[0]
+
+const acceptedNoop = () => {}
+const onReplyFailed = () => notify.error(REPLY_NOT_SENT)
 
 export function MobileSession({ chatId, title, kind, initialMessages, initialError, initiallyInFlight }: MobileSessionProps) {
 	const [sheetOpen, setSheetOpen] = useState(false)
@@ -39,6 +45,10 @@ export function MobileSession({ chatId, title, kind, initialMessages, initialErr
 	const pending = pendingFor(session.messages, session.nativeMessages)
 	const running = session.status === "submitted" || session.status === "streaming"
 	const stick = useStickToBottom(session.messages)
+	const send = session.send
+	// Passing onAccepted puts a refused reply on the opening-message path: its optimistic bubble is
+	// removed, so the text lives only in the box (no phantom message, no double on resend).
+	const onReply = useCallback((text: string) => sendReply(text, (input) => send(input, acceptedNoop)), [send])
 	const submitAnswer = useMemo(() => toSubmitAnswerFn(session.submitAnswer), [session.submitAnswer])
 	const open = sheetOpen && pending !== null
 
@@ -56,6 +66,8 @@ export function MobileSession({ chatId, title, kind, initialMessages, initialErr
 			onScroll={stick.onScroll}
 			atBottom={stick.atBottom}
 			onJumpLatest={stick.jump}
+			onReply={onReply}
+			onReplyFailed={onReplyFailed}
 		>
 			{pending ? <PendingSheet key={pending.key} chatId={chatId} pending={pending} open={open} onOpenChange={setSheetOpen} submitAnswer={submitAnswer} /> : null}
 		</SessionView>

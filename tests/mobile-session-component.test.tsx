@@ -104,10 +104,29 @@ describe("session view chrome", () => {
 		assert.match(link, /href="\/"/)
 		assert.match(link, /min-height:44px;min-width:44px/)
 	})
-	it("a finished session without a pending question shows the read-only notice", () => {
-		assert.match(view(), /Continue this session on your desktop\./)
-		assert.doesNotMatch(view({ hasPending: true }), /Continue this session/)
-		assert.doesNotMatch(view({ turnRunning: true, status: "streaming" }), /Continue this session/)
+	it("a session without a pending question shows a reply box instead of a desktop notice", () => {
+		const html = view({ onReply: async () => true })
+		assert.match(html, /<textarea[^>]*aria-label="Reply"/)
+		assert.doesNotMatch(html, /Continue this session/)
+	})
+	it("a pending question shows the Answer bar and no reply box", () => {
+		assert.doesNotMatch(view({ hasPending: true, onReply: async () => true }), /aria-label="Reply"/)
+	})
+	it("the reply box is set up for iOS dictation and keyboard", () => {
+		const box = view({ onReply: async () => true }).match(/<textarea[^>]*>/)?.[0] ?? ""
+		assert.match(box, /enterKeyHint="send"|enterkeyhint="send"/i)
+		assert.match(box, /autoCapitalize="sentences"|autocapitalize="sentences"/i)
+		assert.doesNotMatch(box, /autocomplete="off"|autocorrect="off"|spellcheck="false"/i)
+		// Under 16px iOS zooms the page on focus.
+		assert.match(box, /font-size:17px/)
+	})
+	it("Send is disabled while the box is empty and is a 44px target", () => {
+		const send = view({ onReply: async () => true }).match(/<button[^>]*>Send<\/button>/)?.[0] ?? ""
+		assert.match(send, /disabled=""/)
+		assert.match(send, /min-height:44px;min-width:44px/)
+	})
+	it("the reply box stays mounted while a turn runs so a dictated reply is not lost", () => {
+		assert.match(view({ turnRunning: true, status: "streaming", onReply: async () => true }), /aria-label="Reply"/)
 	})
 	it("shows the Thinking placeholder while submitted", () => {
 		assert.match(view({ status: "submitted", turnRunning: true }), /data-testid="thinking"/)
@@ -118,8 +137,8 @@ describe("session view chrome", () => {
 		assert.doesNotMatch(view({ atBottom: true, onJumpLatest: noop }), /Jump to latest/)
 	})
 	it("no desktop-only controls render", () => {
-		const html = view({ hasPending: true })
-		assert.doesNotMatch(html, /contenteditable|Steer|Stop|Model|<textarea|<input/i)
+		const html = view({ onReply: async () => true })
+		assert.doesNotMatch(html, /contenteditable|Steer|Stop|Model|<input|type="file"|Attach/i)
 	})
 })
 
