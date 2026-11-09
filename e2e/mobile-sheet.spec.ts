@@ -17,6 +17,16 @@ for (const project of ["iphone-13", "iphone-se"] as const) {
 		await expect
 			.poll(async () => (await dialog.boundingBox())?.y ?? Number.POSITIVE_INFINITY, { timeout: 2000 })
 			.toBeLessThan(vh)
+		// Hit-test only once the entry spring has settled: a mid-flight box is stale by the time it is probed.
+		let last = Number.NaN
+		await expect
+			.poll(async () => {
+				const y = (await dialog.boundingBox())?.y ?? Number.NaN
+				const settled = y === last
+				last = y
+				return settled
+			}, { timeout: 2000, intervals: [50] })
+			.toBe(true)
 		// The first option is hit-testable at its centre (no layer swallows the tap).
 		const option = dialog.getByRole("radio").first()
 		const box = await option.boundingBox()
