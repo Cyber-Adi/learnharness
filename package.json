@@ -28,6 +28,7 @@
 		"coverage:mobile": "c8 npm run test:mobile",
 		"e2e": "playwright test",
 		"e2e:install": "playwright install chromium",
+		"e2e:perf": "playwright test -c playwright.perf.config.ts",
 		"check:mobile": "npm run typecheck && npm run typecheck:e2e && npm run lint && npm run coverage:mobile",
 		"typecheck:e2e": "tsc --noEmit -p tsconfig.e2e.json",
 		"icons": "node scripts/mobile-icons.mjs"

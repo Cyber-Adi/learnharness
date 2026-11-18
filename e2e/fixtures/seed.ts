@@ -64,6 +64,22 @@ const pending = await seedChat("Planets quiz", () =>
 const finished = await seedChat("Inner planets overview", () =>
 	fauxAssistantMessage([fauxText("Mercury, Venus, Earth and Mars are the rocky inner planets.")]),
 );
+// Gate 2 warm runs each consume one pending question: LH_E2E_SEED_WARM=N seeds N more, each with
+// the dismissal a desktop would post (built by the same question-core the desktop dock uses).
+// A dismissal writes the record without a turn, so the host needs no model key.
+const { dismissedAnswer } = await import("../../src/core/question-core.ts");
+const warmCount = Number.parseInt(process.env.LH_E2E_SEED_WARM ?? "0", 10);
+assert.ok(Number.isInteger(warmCount) && warmCount >= 0 && warmCount <= 20, "LH_E2E_SEED_WARM is 0..20");
+const warm: { chatId: string; callId: string; dismissal: unknown }[] = [];
+for (let i = 1; i <= warmCount; i++) {
+	const callId = `warm-q${i}`;
+	const chatId = await seedChat(`Warm resume ${i}`, () =>
+		fauxAssistantMessage([fauxText("Quick check before we go on."), fauxToolCall("quiz", QUIZ, { id: callId })], {
+			stopReason: "toolUse",
+		}),
+	);
+	warm.push({ chatId, callId, dismissal: dismissedAnswer("quiz", QUIZ.question) });
+}
 fs.mkdirSync(path.dirname(seedFile), { recursive: true });
-fs.writeFileSync(seedFile, JSON.stringify({ pending, finished, pendingCallId: "seed-q1" }));
+fs.writeFileSync(seedFile, JSON.stringify({ pending, finished, pendingCallId: "seed-q1", warm }));
 console.log("[seed] wrote", path.basename(seedFile));
