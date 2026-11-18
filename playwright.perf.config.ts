@@ -4,7 +4,8 @@ import path from "node:path"
 import { defineConfig } from "@playwright/test"
 import { WARM_RUNS } from "./e2e/support/resume-gate.ts"
 
-// Gate 2 (resume <= 3 s on 4G) runs on a production build, never next dev:
+// Gate 2 (resume <= 3 s on 4G) runs on a production build, never next dev, and with
+// LH_IGNORE_ENV_KEYS=1 so no exported provider key reaches the test host.
 // dev compiles routes on first visit and would measure the compiler, not the app.
 const PORT = 3419
 process.env.LH_E2E_DATA_DIR ??= fs.mkdtempSync(path.join(os.tmpdir(), "lh-perf-"))
@@ -28,7 +29,7 @@ export default defineConfig({
 	timeout: 180_000,
 	use: { baseURL: `http://localhost:${PORT}`, trace: "retain-on-failure" },
 	webServer: {
-		command: `${seed} && npx next build && npx next start -p ${PORT}`,
+		command: `${seed} && npx next build && LH_IGNORE_ENV_KEYS=1 npx next start -p ${PORT}`,
 		url: `http://localhost:${PORT}`,
 		reuseExistingServer: false,
 		timeout: 600_000,

@@ -28,8 +28,9 @@ export default defineConfig({
 		trace: "retain-on-failure",
 	},
 	webServer: {
-		command: `${MOBILE ? seedCommand : ""}npx next dev -p ${PORT}`,
+		command: `${MOBILE ? seedCommand : ""}LH_IGNORE_ENV_KEYS=1 npx next dev -p ${PORT}`,
 		url: `http://localhost:${PORT}`,
+		// LH_IGNORE_ENV_KEYS=1 (upstream's fresh-user switch): no exported provider key reaches a test host.
 		// A reused dev server would run against someone else's data dir, not the seeded scratch one.
 		reuseExistingServer: !process.env.CI && !MOBILE,
 		timeout: 120_000,
