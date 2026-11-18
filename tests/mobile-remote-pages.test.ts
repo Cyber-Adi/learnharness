@@ -36,10 +36,9 @@ const input = (over: Partial<GatewayInput> = {}): GatewayInput => ({
 const code = (d: ReturnType<typeof decide>): string | null =>
 	d.kind === "deny" && "ok" in d.body ? d.body.error.code : null;
 
-test("a remote page request without a device is unauthorized", () => {
-	const d = decide(input());
-	assert.equal(code(d), "unauthorized");
-	assert.equal(d.kind === "deny" && d.status, 401);
+// Wave D: a page without a device goes to pairing (tests/mobile-remote-pair-redirect), never served.
+test("a remote page request without a device is not served", () => {
+	assert.deepEqual(decide(input()), { kind: "redirect", location: "/pair" });
 });
 
 test("a remote page request with a valid device is allowed", () => {
@@ -56,8 +55,9 @@ test("a remote /pair page is reachable without a device", () => {
 	for (const pathname of ["/pair", "/pair/", "/pair/anything"]) {
 		assert.deepEqual(decide(input({ pathname })), { kind: "allow", via: "remote" }, pathname);
 	}
-	assert.equal(code(decide(input({ pathname: "/pairing" }))), "unauthorized");
-	assert.equal(code(decide(input({ pathname: "/pair-x/y" }))), "unauthorized");
+	// Look-alike paths are not the public pair page: they are sent to it, not served.
+	assert.deepEqual(decide(input({ pathname: "/pairing" })), { kind: "redirect", location: "/pair" });
+	assert.deepEqual(decide(input({ pathname: "/pair-x/y" })), { kind: "redirect", location: "/pair" });
 });
 
 test("a page request with an unknown Host is rejected", () => {

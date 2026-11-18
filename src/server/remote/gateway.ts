@@ -25,7 +25,9 @@ export interface GatewayInput {
 export type LegacyDenyBody = { readonly error: string };
 export type GatewayDecision =
 	| { readonly kind: "allow"; readonly via: "desktop" | "local" | "remote"; readonly deviceId?: string }
-	| { readonly kind: "deny"; readonly status: number; readonly body: RemoteErrorEnvelope | LegacyDenyBody };
+	| { readonly kind: "deny"; readonly status: number; readonly body: RemoteErrorEnvelope | LegacyDenyBody }
+	/** A remote page opened without a valid device: send it to pairing instead of a JSON error. */
+	| { readonly kind: "redirect"; readonly location: "/pair" };
 
 /** Upstream's exact 403 body for an unauthorized local request in desktop mode. */
 export const LOCAL_DENY_BODY: LegacyDenyBody = Object.freeze({
@@ -114,7 +116,8 @@ function decideRemote(input: GatewayInput, get: (n: string) => string | null, ho
 	if (publicRoute) return originOk ? { kind: "allow", via: "remote" } : deny("bad_origin");
 	const cookie = readDeviceCookie(get("cookie"));
 	const device = cookie === null ? null : input.resolveDevice(cookie);
-	if (!device) return deny("unauthorized");
+	// An unpaired or revoked phone opening the app (GET page only) goes to pairing; APIs keep the JSON 401.
+	if (!device) return page && method === "GET" ? { kind: "redirect", location: "/pair" } : deny("unauthorized");
 	const permitted = page ? device.scopes.includes("learn") : remoteAllowed(method, input.pathname, device.scopes);
 	if (!permitted) return deny("forbidden_scope");
 	if (!originOk) return deny("bad_origin");

@@ -14,6 +14,10 @@ export function proxy(request: NextRequest) {
 		env: gatewayEnv(process.env, request.headers),
 		resolveDevice: (cookie) => resolveDevice(defaultDevicesFile(), cookie, Date.now()),
 	});
+	if (decision.kind === "redirect") {
+		// Relative on purpose: behind tailscale serve this server sees http, the phone is on https.
+		return new NextResponse(null, { status: 303, headers: { Location: decision.location, "Cache-Control": "no-store" } });
+	}
 	if (decision.kind === "deny") {
 		return NextResponse.json(decision.body, {
 			status: decision.status,
