@@ -55,6 +55,7 @@ a Next API.
 | Coverage gate (80%, our code) | `npm run coverage:mobile` |
 | E2E (390x844, 375x667, 1440x900) | `npm run e2e` (first: `npm run e2e:install`) |
 | Full mobile gate | `npm run check:mobile && npm run e2e` |
+| Resume gate (prod build, Slow 4G) | `npm run e2e:perf` (see `docs/GATES.md`) |
 | Regenerate PWA icons | `npm run icons` |
 
 Browser checks against `next dev` use `http://localhost:<port>`, never

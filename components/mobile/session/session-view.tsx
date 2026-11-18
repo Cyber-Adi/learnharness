@@ -1,4 +1,4 @@
-import type { ReactNode, RefObject, UIEventHandler } from "react"
+import type { Dispatch, ReactNode, RefObject, SetStateAction, UIEventHandler } from "react"
 import type { LhViewMessage } from "@/src/core"
 import { ReplyBar } from "./reply-bar.tsx"
 import { bottomBar } from "./reply-model.ts"
@@ -22,10 +22,13 @@ export interface SessionViewProps {
 	/** Plain text reply for open questions; onAccepted fires at the server's acknowledgement. */
 	readonly onReply?: (text: string, onAccepted: () => void) => Promise<boolean>
 	readonly onReplyFailed?: () => void
+	readonly replyText?: string
+	readonly onReplyText?: Dispatch<SetStateAction<string>>
 	/** The question sheet. */
 	readonly children?: ReactNode
 }
 
+const ignoreText: Dispatch<SetStateAction<string>> = () => {}
 const BAR = "shrink-0 border-t border-current/10 px-4 pt-2"
 const BAR_STYLE = { paddingBottom: "calc(var(--lh-m-safe-bottom, env(safe-area-inset-bottom, 0px)) + 8px)" } as const
 
@@ -58,7 +61,7 @@ export function SessionView(props: SessionViewProps) {
 				</div>
 			) : props.onReply ? (
 				<div className={BAR} style={BAR_STYLE}>
-					<ReplyBar busy={turnRunning} onSend={props.onReply} onFailed={props.onReplyFailed} />
+					<ReplyBar busy={turnRunning} onSend={props.onReply} onFailed={props.onReplyFailed} text={props.replyText ?? ""} onTextChange={props.onReplyText ?? ignoreText} />
 				</div>
 			) : null}
 

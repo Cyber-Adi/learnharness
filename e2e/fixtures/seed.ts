@@ -64,6 +64,45 @@ const pending = await seedChat("Planets quiz", () =>
 const finished = await seedChat("Inner planets overview", () =>
 	fauxAssistantMessage([fauxText("Mercury, Venus, Earth and Mars are the rocky inner planets.")]),
 );
+// The rotation test types, submits and reads back drafts; both phone projects run it at once, so each
+// project owns its pending question (sharing one raced their drafts under a full parallel run).
+const rotation: Record<string, string> = {};
+for (const project of ["iphone-13", "iphone-se"]) {
+	rotation[project] = await seedChat(`Rotation ${project}`, () =>
+		fauxAssistantMessage([fauxText("Let us start with a quick check."), fauxToolCall("quiz", QUIZ, { id: `rotation-${project}` })], {
+			stopReason: "toolUse",
+		}),
+	);
+}
+
+// Cross-device draft specs each own a pending question, so drafts never leak into other specs.
+const drafts: string[] = [];
+for (const name of ["a", "b", "c", "d"]) {
+	drafts.push(
+		await seedChat(`Draft sync ${name}`, () =>
+			fauxAssistantMessage([fauxText("One more check."), fauxToolCall("quiz", QUIZ, { id: `draft-q${name}` })], {
+				stopReason: "toolUse",
+			}),
+		),
+	);
+}
+
+// Gate 2 warm runs each consume one pending question: LH_E2E_SEED_WARM=N seeds N more, each with
+// the dismissal a desktop would post (built by the same question-core the desktop dock uses).
+// A dismissal writes the record without a turn, so the host needs no model key.
+const { dismissedAnswer } = await import("../../src/core/question-core.ts");
+const warmCount = Number.parseInt(process.env.LH_E2E_SEED_WARM ?? "0", 10);
+assert.ok(Number.isInteger(warmCount) && warmCount >= 0 && warmCount <= 20, "LH_E2E_SEED_WARM is 0..20");
+const warm: { chatId: string; callId: string; dismissal: unknown }[] = [];
+for (let i = 1; i <= warmCount; i++) {
+	const callId = `warm-q${i}`;
+	const chatId = await seedChat(`Warm resume ${i}`, () =>
+		fauxAssistantMessage([fauxText("Quick check before we go on."), fauxToolCall("quiz", QUIZ, { id: callId })], {
+			stopReason: "toolUse",
+		}),
+	);
+	warm.push({ chatId, callId, dismissal: dismissedAnswer("quiz", QUIZ.question) });
+}
 fs.mkdirSync(path.dirname(seedFile), { recursive: true });
-fs.writeFileSync(seedFile, JSON.stringify({ pending, finished, pendingCallId: "seed-q1" }));
+fs.writeFileSync(seedFile, JSON.stringify({ pending, finished, pendingCallId: "seed-q1", warm, drafts, rotation }));
 console.log("[seed] wrote", path.basename(seedFile));

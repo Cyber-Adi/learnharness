@@ -30,6 +30,8 @@ const onReplyFailed = () => notify.error(REPLY_NOT_SENT)
 
 export function MobileSession({ chatId, title, kind, initialMessages, initialError, initiallyInFlight }: MobileSessionProps) {
 	const [sheetOpen, setSheetOpen] = useState(false)
+	// Above the Answer/Reply swap: a turn that ends on a question must not destroy a half-typed reply.
+	const [replyText, setReplyText] = useState("")
 	const closeSheet = useCallback(() => setSheetOpen(false), [])
 	const options: SessionOptions = {
 		chatId,
@@ -67,6 +69,8 @@ export function MobileSession({ chatId, title, kind, initialMessages, initialErr
 			onJumpLatest={stick.jump}
 			onReply={onReply}
 			onReplyFailed={onReplyFailed}
+			replyText={replyText}
+			onReplyText={setReplyText}
 		>
 			{pending ? <PendingSheet key={pending.key} chatId={chatId} pending={pending} open={open} onOpenChange={setSheetOpen} submitAnswer={submitAnswer} /> : null}
 		</SessionView>

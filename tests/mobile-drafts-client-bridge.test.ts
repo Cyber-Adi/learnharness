@@ -66,7 +66,9 @@ describe("desktop draft bridge (SYNC-4)", () => {
 		assert.deepEqual(puts, [], "seeding is not echoed back to the server");
 	});
 
-	it("a draft that came from the desktop never seeds the dock", async () => {
+	// Wave D: a reloaded desktop had lost its own draft though the host held it (e2e: the
+	// desktop's own draft survives a desktop reload). Restoring it must still not echo a PUT.
+	it("the desktop's own draft restores an untouched dock without echoing it back", async () => {
 		const puts: string[] = [];
 		const f: FetchLike = async (_u, init) => {
 			if (init?.method === "PUT") puts.push("put");
@@ -74,8 +76,8 @@ describe("desktop draft bridge (SYNC-4)", () => {
 		};
 		const { clock, bridge, model } = setup(f);
 		const seeded = await bridge.seed({ key: "c1", toolCallId: "c1", get: (k) => model.questionDraft(k), save: (k, d) => model.saveQuestionDraft(k, d) });
-		assert.equal(seeded, false);
-		assert.equal(model.questionDraft("c1"), undefined);
+		assert.equal(seeded, true);
+		assert.notEqual(model.questionDraft("c1"), undefined);
 		clock.advance(2000);
 		await new Promise((r) => setImmediate(r));
 		assert.deepEqual(puts, []);

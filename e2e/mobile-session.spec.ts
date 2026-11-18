@@ -8,6 +8,7 @@ interface Seed {
 	readonly pending: string
 	readonly finished: string
 	readonly pendingCallId: string
+	readonly rotation: Readonly<Record<string, string>>
 }
 
 function readSeed(): Seed {
@@ -25,7 +26,10 @@ for (const project of PHONES) {
 		const start = page.viewportSize()
 		if (!start) throw new Error("no viewport")
 
-		await page.goto(`/chat/${seed.pending}`)
+		// Its own chat per project: the two projects run this at once and must not share drafts.
+		const chatId = seed.rotation[project]
+		if (!chatId) throw new Error(`no rotation chat seeded for ${project}`)
+		await page.goto(`/chat/${chatId}`)
 		const answer = page.getByRole("button", { name: "Answer", exact: true })
 		await expect(answer).toBeVisible()
 		await answer.click()
@@ -188,7 +192,30 @@ test("the box clears as soon as the reply is accepted, not when the turn ends", 
 	const box = page.getByRole("textbox", { name: "Reply" })
 	await box.fill("Why is Venus hotter?")
 	await page.getByRole("button", { name: "Send", exact: true }).click()
-	await expect(box).toHaveValue("", { timeout: 3000 })
+	// The held stream never ends, so any wait tells "at acceptance" from "at turn end"; 10 s rides out a loaded machine.
+	await expect(box).toHaveValue("", { timeout: 10_000 })
 	// The held stream route is still open; drop it so it cannot error after the test.
 	await page.unrouteAll({ behavior: "ignoreErrors" })
+})
+
+test("text typed while a reply is being sent survives the acceptance", async ({ page }, info) => {
+	test.skip(info.project.name !== "iphone-13", "runs on iphone-13 only")
+	let release: () => void = () => {}
+	const held = new Promise<void>((resolve) => {
+		release = resolve
+	})
+	await page.route("**/api/chat", async (route) => {
+		if (route.request().method() !== "POST") return route.continue()
+		await held
+		await route.fulfill({ status: 200, contentType: "application/json", body: "{}" })
+	})
+	await page.goto(`/chat/${readSeed().finished}`)
+	const box = page.getByRole("textbox", { name: "Reply" })
+	await box.fill("Why is Venus hotter?")
+	await page.getByRole("button", { name: "Send", exact: true }).click()
+	// Still dictating while the first reply is in flight.
+	await box.press("End")
+	await box.pressSequentially(" And what about Mars?")
+	release()
+	await expect(box).toHaveValue("And what about Mars?")
 })

@@ -1,7 +1,7 @@
 "use client"
 
-import { type ChangeEvent, type KeyboardEvent, useCallback, useRef, useState } from "react"
-import { REPLY_MAX_CHARS, canSend, shouldSendOnKey } from "./reply-model.ts"
+import { type ChangeEvent, type Dispatch, type KeyboardEvent, type SetStateAction, useCallback, useRef, useState } from "react"
+import { REPLY_MAX_CHARS, afterAccepted, canSend, shouldSendOnKey } from "./reply-model.ts"
 
 export interface ReplyBarProps {
 	/** A turn is running: the box stays editable, Send waits. */
@@ -9,13 +9,15 @@ export interface ReplyBarProps {
 	/** Calls onAccepted at the server's acknowledgement; resolves true if the reply was accepted. */
 	readonly onSend: (text: string, onAccepted: () => void) => Promise<boolean>
 	readonly onFailed?: () => void
+	/** Owned by the session, above the Answer/Reply swap, so a new question never destroys a half-typed reply. */
+	readonly text: string
+	readonly onTextChange: Dispatch<SetStateAction<string>>
 }
 
 const MAX_HEIGHT_PX = 160
 
 // 17px keeps iOS from zooming on focus; autocorrect and spellcheck stay on so dictation reads cleanly.
-export function ReplyBar({ busy, onSend, onFailed }: ReplyBarProps) {
-	const [text, setText] = useState("")
+export function ReplyBar({ busy, onSend, onFailed, text, onTextChange: setText }: ReplyBarProps) {
 	const [sending, setSending] = useState(false)
 	const ref = useRef<HTMLTextAreaElement | null>(null)
 	// Two taps in one task both see the pre-render `sending`, so the guard must be synchronous.
@@ -33,20 +35,22 @@ export function ReplyBar({ busy, onSend, onFailed }: ReplyBarProps) {
 		if (!ready || inFlight.current) return
 		inFlight.current = true
 		setSending(true)
+		const sent = text
 		let cleared = false
 		// Clear at acceptance, not when the turn ends: the reply is in the transcript from then on.
+		// Only the sent text goes; anything dictated while the send was in flight stays.
 		const clear = () => {
 			if (cleared) return
 			cleared = true
-			setText("")
+			setText((current) => afterAccepted(current, sent))
 			requestAnimationFrame(grow)
 		}
-		const accepted = await onSend(text, clear)
+		const accepted = await onSend(sent, clear)
 		inFlight.current = false
 		setSending(false)
 		if (accepted) clear()
 		else if (!cleared) onFailed?.()
-	}, [ready, onSend, text, onFailed, grow])
+	}, [ready, onSend, text, setText, onFailed, grow])
 
 	const onChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
 		setText(e.target.value)

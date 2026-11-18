@@ -1,6 +1,6 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { REPLY_MAX_CHARS, bottomBar, canSend, sendReply, shouldSendOnKey } from "../components/mobile/session/reply-model.ts"
+import { REPLY_MAX_CHARS, afterAccepted, bottomBar, canSend, sendReply, shouldSendOnKey } from "../components/mobile/session/reply-model.ts"
 
 describe("bottom bar", () => {
 	it("a pending question shows the Answer bar, not the reply box", () => {
@@ -95,5 +95,23 @@ describe("sendReply", () => {
 			accepted = true
 		})
 		assert.equal(accepted, false)
+	})
+})
+
+describe("afterAccepted", () => {
+	it("an untouched box empties", () => {
+		assert.equal(afterAccepted("Why is Venus hotter?", "Why is Venus hotter?"), "")
+	})
+	it("keeps what was typed after the sent text", () => {
+		assert.equal(afterAccepted("Why is Venus hotter? And Mars?", "Why is Venus hotter?"), "And Mars?")
+	})
+	it("matches the sent text even though the send trimmed it", () => {
+		assert.equal(afterAccepted("  Why is Venus hotter?  More", "  Why is Venus hotter?"), "More")
+	})
+	it("keeps everything when the learner edited inside the sent text", () => {
+		assert.equal(afterAccepted("Why is Venus so hot?", "Why is Venus hotter?"), "Why is Venus so hot?")
+	})
+	it("an emptied box stays empty", () => {
+		assert.equal(afterAccepted("", "Why is Venus hotter?"), "")
 	})
 })
