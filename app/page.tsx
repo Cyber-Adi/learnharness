@@ -1,6 +1,5 @@
 import { cookies } from "next/headers";
-import { Home } from "@/components/home";
-import { LearnScreen } from "@/components/mobile/learn/learn-screen";
+import { HomeBranch } from "@/components/mobile/shell/route-branches";
 import { TZ_COOKIE, resolveTimeZone } from "@/components/mobile/learn/time-zone";
 import { requestFormFactor } from "@/components/mobile/shell/request-form-factor";
 import { compactionInFlight, isTurnRunning, listChats, readSettingsRecord } from "@/src/server";
@@ -17,7 +16,7 @@ export default async function HomePage() {
 		const initialChats = listChats().map((c) => ({ ...c, busy: isTurnRunning(c.id), compacting: compactionInFlight(c.id) }));
 		// The phone's zone rides in a cookie so server and first client render agree (UTC until it is set).
 		const timeZone = resolveTimeZone((await cookies()).get(TZ_COOKIE)?.value);
-		return <LearnScreen initialChats={initialChats} now={Date.now()} timeZone={timeZone} />;
+		return <HomeBranch mobile={{ initialChats, now: Date.now(), timeZone }} />;
 	}
 	// First-run gate (model-slots wave): chats cannot start until the user
 	// has picked all three slots — the dock shows the CTA while the raw
@@ -28,6 +27,6 @@ export default async function HomePage() {
 	// section / absent key → factory default on); re-read per navigation.
 	const rendering = resolveSettings(record ?? null).graph.rendering;
 	return (
-		<Home initialConfigured={slotsConfigured(record?.models)} rendering={rendering} />
+		<HomeBranch desktop={{ initialConfigured: slotsConfigured(record?.models), rendering }} />
 	);
 }

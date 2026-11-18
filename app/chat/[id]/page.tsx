@@ -1,6 +1,5 @@
 import { notFound } from "next/navigation";
-import { Chat } from "@/components/chat";
-import { MobileSession } from "@/components/mobile/session/mobile-session";
+import { ChatBranch } from "@/components/mobile/shell/route-branches";
 import { requestFormFactor } from "@/components/mobile/shell/request-form-factor";
 import { slotsConfigured } from "@/src/core";
 import { compactionInFlight, getChat, isTurnRunning, readSettingsRecord, turnFailure } from "@/src/server";
@@ -23,35 +22,39 @@ export default async function ChatPage({
 	// Mobile fork: the phone gets the mobile session screen, decided before hydration.
 	if ((await requestFormFactor()) === "mobile") {
 		return (
-			<MobileSession
+			<ChatBranch
 				key={chat.id}
-				chatId={chat.id}
-				title={chat.title}
-				kind={chat.kind ?? "teach"}
-				initialMessages={chat.messages}
-				initialError={turnFailure(chat.id)}
-				initiallyInFlight={isTurnRunning(chat.id)}
+				mobile={{
+					chatId: chat.id,
+					title: chat.title,
+					kind: chat.kind ?? "teach",
+					initialMessages: chat.messages,
+					initialError: turnFailure(chat.id),
+					initiallyInFlight: isTurnRunning(chat.id),
+				}}
 			/>
 		);
 	}
 	const record = readSettingsRecord();
 	return (
-		<Chat
+		<ChatBranch
 			key={chat.id}
-			chatId={chat.id}
-			title={chat.title}
-			kind={chat.kind ?? "teach"}
-			// Wave D: the record IS native agent history — the client view is
+			desktop={{
+				chatId: chat.id,
+				title: chat.title,
+				kind: chat.kind ?? "teach",
+				// Wave D: the record IS native agent history — the client view is
 				// derived app-side (core/view.ts projectView; GET serves the same
 				// native messages).
-				initialMessages={chat.messages}
-			initialError={turnFailure(chat.id)}
-			initialConfigured={slotsConfigured(record?.models)}
-			initialPrompt={prompt}
-			// A teacher turn that outlived its client: the remounted view must
-			// attach (busy shimmer + poll), never resurrect the stale record.
-			initiallyInFlight={isTurnRunning(chat.id)}
-			initiallyCompacting={compactionInFlight(chat.id)}
+				initialMessages: chat.messages,
+				initialError: turnFailure(chat.id),
+				initialConfigured: slotsConfigured(record?.models),
+				initialPrompt: prompt,
+				// A teacher turn that outlived its client: the remounted view must
+				// attach (busy shimmer + poll), never resurrect the stale record.
+				initiallyInFlight: isTurnRunning(chat.id),
+				initiallyCompacting: compactionInFlight(chat.id),
+			}}
 		/>
 	);
 }

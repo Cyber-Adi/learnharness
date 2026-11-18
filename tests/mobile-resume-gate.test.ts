@@ -1,10 +1,13 @@
 import assert from "node:assert/strict"
 import { describe, it } from "node:test"
-import { RESUME_BUDGET_MS, SLOW_4G, formatGate, judge, summarize } from "../e2e/support/resume-gate.ts"
+import { RESUME_BUDGET_MS, ROUTE_JS_BUDGET_BYTES, SLOW_4G, formatGate, judge, summarize } from "../e2e/support/resume-gate.ts"
 
 describe("resume gate budget", () => {
 	it("the budget is the PRD's 3 s", () => {
 		assert.equal(RESUME_BUDGET_MS, 3000)
+	})
+	it("phone routes ship at most CLAUDE.md's 250 KB of gzipped JS", () => {
+		assert.equal(ROUTE_JS_BUDGET_BYTES, 256_000)
 	})
 	it("throttles to Lighthouse's Slow 4G: 150 ms RTT, 1.6 Mbps down, 750 Kbps up, 4x CPU", () => {
 		assert.deepEqual(SLOW_4G, { latency: 150, downloadThroughput: 200_000, uploadThroughput: 93_750, cpuSlowdown: 4 })
