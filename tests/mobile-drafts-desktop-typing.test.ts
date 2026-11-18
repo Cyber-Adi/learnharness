@@ -67,4 +67,12 @@ describe("desktop dock typing (SYNC-4)", () => {
 		assert.equal(await bridge.seed(seedReq), true);
 		assert.equal(model.questionDraft("c1")?.form?.thinking, "from phone");
 	});
+
+	it("the desktop's own server draft restores an untouched dock after a reload", async () => {
+		const own = { ...phoneDraft, text: "half a thought", deviceLabel: "desktop" };
+		const f: FetchLike = async () => new Response(JSON.stringify({ ok: true, data: own }));
+		const { bridge, model, seedReq } = setup(f);
+		assert.equal(await bridge.seed(seedReq), true);
+		assert.equal(model.questionDraft("c1")?.form?.thinking, "half a thought");
+	});
 });

@@ -25,7 +25,7 @@ export interface DesktopBridge {
 	dispose(): void;
 }
 
-/** Desktop side of SYNC-4: pushes question drafts up, pulls a phone draft into the dock. */
+/** Desktop side of SYNC-4: pushes question drafts up, pulls the host's draft into an untouched dock. */
 export function createDesktopBridge(deps: DesktopBridgeDeps): DesktopBridge {
 	const sync = createDraftSync({
 		send: (body, options) => putDraft(deps.fetchFn, deps.chatId, body, options.keepalive),
@@ -45,8 +45,10 @@ export function createDesktopBridge(deps: DesktopBridgeDeps): DesktopBridge {
 		},
 		async seed(req) {
 			if (req.get(req.key) || touched.has(req.toolCallId)) return false;
-			const { initial, origin } = await loadDraft(deps.fetchFn, deps.chatId, req.toolCallId);
-			if (initial === null || origin !== "phone" || req.get(req.key) || touched.has(req.toolCallId)) return false;
+			// Any origin: the host's draft is the newest (last writer wins), and after a reload it may
+			// be this desktop's own unsent-answer draft, which the in-memory dock has lost.
+			const { initial } = await loadDraft(deps.fetchFn, deps.chatId, req.toolCallId);
+			if (initial === null || req.get(req.key) || touched.has(req.toolCallId)) return false;
 			seeding = true;
 			try {
 				req.save(req.key, toDesktopDraft(initial));

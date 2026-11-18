@@ -64,6 +64,18 @@ const pending = await seedChat("Planets quiz", () =>
 const finished = await seedChat("Inner planets overview", () =>
 	fauxAssistantMessage([fauxText("Mercury, Venus, Earth and Mars are the rocky inner planets.")]),
 );
+// Cross-device draft specs each own a pending question, so drafts never leak into other specs.
+const drafts: string[] = [];
+for (const name of ["a", "b", "c", "d"]) {
+	drafts.push(
+		await seedChat(`Draft sync ${name}`, () =>
+			fauxAssistantMessage([fauxText("One more check."), fauxToolCall("quiz", QUIZ, { id: `draft-q${name}` })], {
+				stopReason: "toolUse",
+			}),
+		),
+	);
+}
+
 // Gate 2 warm runs each consume one pending question: LH_E2E_SEED_WARM=N seeds N more, each with
 // the dismissal a desktop would post (built by the same question-core the desktop dock uses).
 // A dismissal writes the record without a turn, so the host needs no model key.
@@ -81,5 +93,5 @@ for (let i = 1; i <= warmCount; i++) {
 	warm.push({ chatId, callId, dismissal: dismissedAnswer("quiz", QUIZ.question) });
 }
 fs.mkdirSync(path.dirname(seedFile), { recursive: true });
-fs.writeFileSync(seedFile, JSON.stringify({ pending, finished, pendingCallId: "seed-q1", warm }));
+fs.writeFileSync(seedFile, JSON.stringify({ pending, finished, pendingCallId: "seed-q1", warm, drafts }));
 console.log("[seed] wrote", path.basename(seedFile));
