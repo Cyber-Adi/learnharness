@@ -15,8 +15,9 @@ const phoneContext = (browser: Browser): Promise<BrowserContext> =>
 const desktopContext = (browser: Browser): Promise<BrowserContext> => browser.newContext({ viewport: { width: 1440, height: 900 } })
 
 // The idle send is 1 s after the last edit (plus the dock's 300 ms report debounce): wait for the PUT itself.
+// 20 s: under a full parallel run next dev may still be compiling the draft route on its first use.
 const draftPut = (page: Page, chatId: string) =>
-	page.waitForResponse((r) => r.request().method() === "PUT" && r.url().includes(`/api/chats/${chatId}/draft`) && r.ok(), { timeout: 10_000 })
+	page.waitForResponse((r) => r.request().method() === "PUT" && r.url().includes(`/api/chats/${chatId}/draft`) && r.ok(), { timeout: 20_000 })
 
 async function openDesktopDock(page: Page, chatId: string) {
 	await page.goto(`/chat/${chatId}`)

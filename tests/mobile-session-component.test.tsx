@@ -125,6 +125,11 @@ describe("session view chrome", () => {
 		assert.match(send, /disabled=""/)
 		assert.match(send, /min-height:44px;min-width:44px/)
 	})
+	it("the reply text is owned above the bar, so a new question cannot destroy it", () => {
+		// The Answer bar replaces the reply box when a turn ends on a question; the text must come back with it.
+		const html = view({ onReply: async () => true, replyText: "half a reply", onReplyText: noop })
+		assert.match(html, /<textarea[^>]*aria-label="Reply"[^>]*>half a reply<\/textarea>/)
+	})
 	it("the reply box stays mounted while a turn runs so a dictated reply is not lost", () => {
 		assert.match(view({ turnRunning: true, status: "streaming", onReply: async () => true }), /aria-label="Reply"/)
 	})

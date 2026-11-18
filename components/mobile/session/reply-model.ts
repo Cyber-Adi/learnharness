@@ -44,3 +44,11 @@ export async function sendReply(text: string, send: SendText, onAccepted: () => 
 		return false
 	}
 }
+
+// What the box should hold once a reply is accepted. Dictation can keep going while the send is in
+// flight: keep whatever follows the sent text, and never drop anything the learner edited.
+export function afterAccepted(current: string, sent: string): string {
+	const head = sent.trimEnd()
+	if (current.trim() === sent.trim()) return ""
+	return current.startsWith(head) ? current.slice(head.length).trimStart() : current
+}

@@ -64,6 +64,17 @@ const pending = await seedChat("Planets quiz", () =>
 const finished = await seedChat("Inner planets overview", () =>
 	fauxAssistantMessage([fauxText("Mercury, Venus, Earth and Mars are the rocky inner planets.")]),
 );
+// The rotation test types, submits and reads back drafts; both phone projects run it at once, so each
+// project owns its pending question (sharing one raced their drafts under a full parallel run).
+const rotation: Record<string, string> = {};
+for (const project of ["iphone-13", "iphone-se"]) {
+	rotation[project] = await seedChat(`Rotation ${project}`, () =>
+		fauxAssistantMessage([fauxText("Let us start with a quick check."), fauxToolCall("quiz", QUIZ, { id: `rotation-${project}` })], {
+			stopReason: "toolUse",
+		}),
+	);
+}
+
 // Cross-device draft specs each own a pending question, so drafts never leak into other specs.
 const drafts: string[] = [];
 for (const name of ["a", "b", "c", "d"]) {
@@ -93,5 +104,5 @@ for (let i = 1; i <= warmCount; i++) {
 	warm.push({ chatId, callId, dismissal: dismissedAnswer("quiz", QUIZ.question) });
 }
 fs.mkdirSync(path.dirname(seedFile), { recursive: true });
-fs.writeFileSync(seedFile, JSON.stringify({ pending, finished, pendingCallId: "seed-q1", warm, drafts }));
+fs.writeFileSync(seedFile, JSON.stringify({ pending, finished, pendingCallId: "seed-q1", warm, drafts, rotation }));
 console.log("[seed] wrote", path.basename(seedFile));
